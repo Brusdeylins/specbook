@@ -382,6 +382,7 @@
             linkProps:
                 -   DEPENDS-ON
             onlyConnected: true
+            qualified: true
     children:
         -   kind: COMPONENT
             desc: >
