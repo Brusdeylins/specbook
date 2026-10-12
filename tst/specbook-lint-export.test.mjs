@@ -225,3 +225,18 @@ test("the functionality view derives a dependency matrix of the DEPENDS-ON refer
     assert.match(matrix, /COMPONENT-ingest --> ARCH-FV\.COMPONENT-gateway/)
     assert.doesNotMatch(matrix, /-layer\n/)
 })
+
+test("the test cases derive a traceability matrix of requirements and test cases", async () => {
+    const [ json ] = await new SpecBook().export({ config: [ "std" ],
+        basedir: path.join(root, "smp", "broadcast"), formats: [ "json" ] })
+    const diagrams = objectOf(JSON.parse(json.toString("utf8")), "TEST", "Test Cases").diagram
+    assert.ok(Array.isArray(diagrams) && diagrams.length === 2)
+    const matrix = diagrams[1]
+    assert.match(matrix, /^#type matrix/)
+
+    /*  the test cases are the columns, the requirements the rows, and
+        the VERIFIES references the traces  */
+    assert.match(matrix, /TEST-TC\.TEST-CASE-valid-token: "Valid Token Grants Access" \[ [^\]]*axis: column/)
+    assert.match(matrix, /REQUIREMENT-authentication: "User Authentication" \[ url: [^\]]*\]\n/)
+    assert.match(matrix, /TEST-CASE-valid-token --> [^\n]*REQUIREMENT-authentication/)
+})

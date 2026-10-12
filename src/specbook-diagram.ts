@@ -234,7 +234,8 @@ interface DiagramNesting {
     derived edge  */
 const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType, center: SpecObject,
     centerUrl: string | undefined, nodes: SpecObject[], edges: DiagramEdge[], nesting: DiagramNesting,
-    config: NonNullable<SchemaDiagram["config"]>, layers: Map<SpecObject, SpecObject>): string => {
+    config: NonNullable<SchemaDiagram["config"]>, layers: Map<SpecObject, SpecObject>,
+    columns: Set<SpecObject>): string => {
     const { index, anchors, positions, parenProps } = ctx
     const lines  = [ `#type ${type}` ]
     for (const [ key, value ] of Object.entries(config))
@@ -275,6 +276,10 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
             attrs.push(`container: ${diagram.nest.layout}`)
         if (diagram.ordered === true)
             attrs.push(`order: ${orderOf(node)}`)
+
+        /*  the column of a traceability "matrix"  */
+        if (columns.has(node))
+            attrs.push("axis: column")
 
         /*  the layer of a "layer" node, by the name of its layer object  */
         const layer = layers.get(node)
@@ -814,6 +819,22 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
     }
     else if (layers !== undefined)
         errors.push({ reason: `"${type}" diagram cannot carry a "layers" configuration` })
+
+    /*  a "matrix" diagram with "columns" is a traceability matrix: the
+        objects matching them are its columns (dropping out of its rows),
+        while its edges are derived from the rows and the columns alike,
+        as a trace may be recorded on either side  */
+    const columnSet = new Set<SpecObject>()
+    if (diagram.columns !== undefined) {
+        if (type !== "matrix")
+            errors.push({ reason: `"${type}" diagram cannot carry a "columns" configuration` })
+        else {
+            const columns = resolvePatterns(index, errors, diagram.columns, "columns")
+            for (const column of columns)
+                columnSet.add(column)
+            nodes = [ ...nodes.filter((node) => !columnSet.has(node)), ...columns ]
+        }
+    }
     const edgeObjects = diagram.edges !== undefined ? resolvePatterns(index, errors, diagram.edges, "edges") : []
     const edgeSet     = new Set<SpecObject>(edgeObjects)
     nodes = nodes.filter((node) => !edgeSet.has(node))
@@ -898,7 +919,7 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         return { type, errors }
 
     const config = diagramConfig(ctx, diagram, type, nodes)
-    return { type, spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting, config, layerMap),
+    return { type, spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting, config, layerMap, columnSet),
         config, columns, errors }
 }
 

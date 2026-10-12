@@ -33,12 +33,17 @@
         -   ISTQB CTFL 4.0: Certified Tester Foundation Level Syllabus (2023),
             https://istqb.org/certifications/certified-tester-foundation-level-ctfl-v4-0/
     diagram:
-        type: grid
-        nodes: "[[TEST-CASE:*]]"
-        config:
-            size-node-width-max: 440
-            size-node-height-scale: 2
-            grid-columns-max: 4
+        -   type: grid
+            nodes: "[[TEST-CASE:*]]"
+            config:
+                size-node-width-max: 440
+                size-node-height-scale: 2
+                grid-columns-max: 4
+        -   type: matrix
+            nodes: "[[REQUIREMENT:*]]"
+            columns: "[[TEST-CASE:*]]"
+            linkProps:
+                -   VERIFIES
     children:
         -   kind: TEST-CASE
             desc: >
