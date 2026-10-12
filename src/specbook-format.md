@@ -82,7 +82,7 @@ type SchemaObject = {
     referenced?:       string[]
     coverage?:         string[]
     automaton?:        SchemaAutomaton
-    diagram?:          SchemaDiagram
+    diagram?:          SchemaDiagram | SchemaDiagram[]
     format?:           SchemaFormat
     props?:            SchemaProperty[]
     children?:         SchemaObject[]
@@ -109,8 +109,13 @@ type SchemaDiagramCenterEdges = {
     labeled?:          string
     via?:              string
 }
+type SchemaDiagramCells = {
+    offset:            string
+    size:              string
+    value?:            string
+}
 type SchemaDiagram = {
-    type?:             "graph" | "hub" | "grid"
+    type?:             "graph" | "hub" | "grid" | "layout"
     nodes?:            string
     edges?:            string
     center?:           string | SchemaDiagramCenter
@@ -125,6 +130,7 @@ type SchemaDiagram = {
     onlyConnected?:    boolean
     collapse?:         boolean
     qualified?:        boolean
+    cells?:            SchemaDiagramCells
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -287,10 +293,14 @@ type SchemaGradiaConfig = Partial<{
     BECAUSE a lifecycle is only trustworthy when its dead-ends and
     livelocks are ruled out
 
--   `SchemaObject.diagram?: SchemaDiagram`:
-    diagram generated for every object of this kind (left out when the
-    configuration is emitted compressed by level 2 or higher),
-    BECAUSE relations buried in references are graspable only when drawn
+-   `SchemaObject.diagram?: SchemaDiagram | SchemaDiagram[]`:
+    diagram, or list of diagrams (of distinct types, by which a later
+    configuration file merges into them), generated for every object of
+    this kind, the several ones rendered one below the other (left out
+    when the configuration is emitted compressed by level 2 or higher),
+    BECAUSE relations buried in references are graspable only when drawn,
+    and one object can be worth more than one perspective (e.g. the
+    users of a binary format and its byte layout)
 
 -   `SchemaObject.format?: SchemaFormat`:
     HTML/PDF rendering format of the objects of this kind (left out when
@@ -342,8 +352,9 @@ type SchemaGradiaConfig = Partial<{
     diagram derived for every object of an object kind,
     BECAUSE the relations of a specification are graspable only when drawn
 
--   `SchemaDiagram.type?: "graph" | "hub" | "grid"`:
+-   `SchemaDiagram.type?: "graph" | "hub" | "grid" | "layout"`:
     diagram shape: `graph` (free), `hub` (centered), `grid` (edge-less),
+    `layout` (the cells of a binary structure, edge-less),
     BECAUSE one object set tells different stories as different shapes
 
 -   `SchemaDiagram.nodes?: string`:
@@ -451,6 +462,26 @@ type SchemaGradiaConfig = Partial<{
     ends of a boundary-crossing edge lifted onto the containers
     (default: `nodes`, i.e. none),
     BECAUSE a bundle of references into a container reads as one edge onto it
+
+-   `SchemaDiagram.cells?: SchemaDiagramCells`:
+    properties of the node objects of a `layout` diagram carrying their
+    cell span (required by and allowed for that type only),
+    BECAUSE a binary structure is drawn from the offsets and sizes of
+    its fields, not from references
+
+-   `SchemaDiagramCells.offset: string`:
+    property carrying the byte offset of a node (decimal or `0x`
+    hexadecimal, optionally followed by `.<bit>` for a bit position),
+    BECAUSE a field is placed by its position within the structure
+
+-   `SchemaDiagramCells.size: string`:
+    property carrying the size of a node, in bytes or, with the unit
+    `bit`, in bits, or `variable` (drawn up to the end of its row),
+    BECAUSE a field spans as many cells as it occupies
+
+-   `SchemaDiagramCells.value?: string`:
+    property carrying the fixed value of a node, shown inside its cells,
+    BECAUSE a magic number or a reserved bit pattern is part of the structure
 
 -   `SchemaDiagram.properties?: string[]`:
     property names attached to the nodes as key/value annotations,
@@ -588,15 +619,16 @@ true` additionally derives a containment edge from every node object to
 each of its child objects which is part of the node set.
 
 This is what turns a parent object into the hub of its own children. A
-`grid` is edge-less by definition and hence accepts neither `edges` nor
-`hierarchy`.
+`grid` and a `layout` are edge-less by definition and hence accept
+neither `edges` nor `hierarchy`.
 
 ### Diagrams
 
 An object kind can additionally carry a `diagram` field, which derives
 a [Gradia](https://github.com/rse/gradia) diagram for every object of
-that kind. Its `type` selects the diagram shape (`graph`, `hub`, or
-`grid`), `nodes` and `edges` select the participating objects through
+that kind (a list of them derives one diagram per entry, rendered one
+below the other). Its `type` selects the diagram shape (`graph`, `hub`,
+`grid`, or `layout`), `nodes` and `edges` select the participating objects through
 comma-separated `[[xxx]]` reference patterns (`nodes` defaults to the
 object itself plus all objects below it), and `center` names the object
 a `hub` is projected onto (default: `self`). An edge object of the
@@ -659,6 +691,18 @@ corresponding container of its source, where the edges coinciding
 afterwards merge into one with their arities summed, so the edges
 inside a container stay node-to-node while the bundles of references
 into a container become single edges onto it.
+
+A `layout` diagram draws the cell layout of a binary structure (e.g. a
+message frame, a file header, or a memory slot): its node objects --
+by default the descendants of the object, of which only those carrying
+a valid offset and size in the properties named by `cells` take part
+-- are the fields, drawn as runs of cells below a ruler and labeled
+below them through a brace (a tick for a single cell), with a fixed
+value shown inside the cells. As soon as a field is not byte-aligned,
+the cells are bits, 32 per row, and otherwise bytes, 16 per row, which
+the Gradia options `layout-cell-bits` and `layout-row-cells` of the
+`config` override, while the offset of every row is shown beside it.
+A `layout` accepts neither a `center` nor a `nest`.
 
 ### Coverage
 

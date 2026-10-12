@@ -9,7 +9,8 @@ import { Gradia }
 
 import type { Spec, SpecObject, SpecProperty }
     from "./specbook-format-spec.js"
-import type { Schema, SchemaDiagram, SchemaDiagramCenterEdges, SchemaDiagramNest }
+import { diagramsOf, type Schema, type SchemaDiagram, type SchemaDiagramCenterEdges,
+    type SchemaDiagramNest, type SchemaDiagramCells }
     from "./specbook-format-schema.js"
 import { referenceRegex, buildLinkIndex, resolveUnique, resolveSet, anchorPaths,
     expandReferences, plainText, type LinkIndex }
@@ -40,8 +41,10 @@ export interface DiagramError {
     from the "#config" directives) and, for a "hub" diagram, its number
     of occupied columns (the center plus the non-empty input and output
     columns of the three-column layout), or the reasons for omitting
-    the diagram (none for a silently omitted empty or collapsed one)  */
+    the diagram (none for a silently omitted empty or collapsed one),
+    plus the diagram type the result is of  */
 export interface DiagramResult {
+    type:     DiagramType
     spec?:    string
     config?:  SchemaDiagram["config"]
     columns?: number
@@ -82,7 +85,51 @@ const diagramPresets: NonNullable<SchemaDiagram["config"]> = {
 
 /*  the diagram shape, i.e., the "type" of a diagram configuration
     with its default applied  */
-type DiagramType = NonNullable<SchemaDiagram["type"]>
+export type DiagramType = NonNullable<SchemaDiagram["type"]>
+
+/*  the cell span of a node object of a "layout" diagram, in bits: its
+    offset (a byte offset with an optional ".<bit>" position, decimal or
+    "0x" hexadecimal), its size (bytes, or bits with the unit "bit", or
+    "variable"), and its optional fixed value (with the code backquotes
+    stripped), absent for an object lacking a valid offset or size  */
+interface CellSpan {
+    offset: number
+    size:   number | "variable"
+    value?: string
+}
+const cellSpanOf = (parenProps: ParenProps, object: SpecObject, cells: SchemaDiagramCells): CellSpan | undefined => {
+    const clean  = (text: string | undefined) =>
+        text !== undefined ? plainText(text).replace(/`/g, "").trim() : undefined
+    const offset = clean(propValue(parenProps, object, cells.offset))
+    const size   = clean(propValue(parenProps, object, cells.size))
+    const om     = offset !== undefined ? /^(0x[0-9A-Fa-f]+|\d+)(?:\.([0-7]))?$/.exec(offset) : null
+    const sm     = size   !== undefined ? /^(?:(\d+)\s*(bit)?|(variable))$/.exec(size) : null
+    if (om === null || sm === null || (sm[1] !== undefined && Number(sm[1]) === 0))
+        return undefined
+    const value = cells.value !== undefined ? clean(propValue(parenProps, object, cells.value)) : undefined
+    return {
+        offset: Number(om[1]) * 8 + Number(om[2] ?? 0),
+        size:   sm[3] !== undefined ? "variable" : Number(sm[1]) * (sm[2] !== undefined ? 1 : 8),
+        value:  value !== "" ? value : undefined
+    }
+}
+
+/*  the Gradia rendering options of a diagram: the presets, for a
+    "layout" diagram the cell granularity its nodes demand (bit cells,
+    32 per row, as soon as a node is not byte-aligned, byte cells, 16
+    per row, otherwise), and finally the configured ones  */
+const diagramConfig = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType,
+    nodes: SpecObject[]): NonNullable<SchemaDiagram["config"]> => {
+    const cells = diagram.cells
+    if (type !== "layout" || cells === undefined)
+        return { ...diagramPresets, ...diagram.config }
+    const bitwise = nodes.some((node) => {
+        const span = cellSpanOf(ctx.parenProps, node, cells)
+        return span !== undefined && (span.offset % 8 !== 0 || (span.size !== "variable" && span.size % 8 !== 0))
+    })
+    return { ...diagramPresets, "layout-cell-bits": bitwise ? 1 : 8, "layout-row-cells": bitwise ? 32 : 16,
+        ...diagram.config }
+}
 
 /*  render a text as a double-quoted Gradia string, with the
     backslashes and the double quotes escaped  */
@@ -160,10 +207,10 @@ interface DiagramNesting {
     label, the container node as the parent) and one edge statement per
     derived edge  */
 const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType, center: SpecObject,
-    centerUrl: string | undefined, nodes: SpecObject[], edges: DiagramEdge[], nesting: DiagramNesting): string => {
+    centerUrl: string | undefined, nodes: SpecObject[], edges: DiagramEdge[], nesting: DiagramNesting,
+    config: NonNullable<SchemaDiagram["config"]>): string => {
     const { index, anchors, positions, parenProps } = ctx
     const lines  = [ `#type ${type}` ]
-    const config = { ...diagramPresets, ...diagram.config }
     for (const [ key, value ] of Object.entries(config))
         if (value !== undefined)
             lines.push(`#config ${key} ${configValue(value)}`)
@@ -202,6 +249,18 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
             attrs.push(`container: ${diagram.nest.layout}`)
         if (diagram.ordered === true)
             attrs.push(`order: ${orderOf(node)}`)
+
+        /*  the cell span of a "layout" node, in cells of the configured
+            granularity (a variable size spanning the rest of its row)  */
+        const span = type === "layout" && diagram.cells !== undefined ?
+            cellSpanOf(parenProps, node, diagram.cells) : undefined
+        if (span !== undefined) {
+            const bits = Number(config["layout-cell-bits"] ?? 8) || 8
+            attrs.push(`offset: ${Math.floor(span.offset / bits)}`)
+            attrs.push(`size: ${span.size === "variable" ? "\"*\"" : Math.max(Math.ceil(span.size / bits), 1)}`)
+            if (span.value !== undefined)
+                attrs.push(`value: ${atom(span.value)}`)
+        }
 
         /*  attach the values of the configured properties as Gradia
             key/value attributes (a node lacking a property is fine, as
@@ -338,13 +397,13 @@ const deriveObjectEdges = (ctx: DiagramContext, diagram: SchemaDiagram, nodeSet:
 
 /*  derive the edges of a diagram: the reference edges of the node
     objects, the object edges of the edge objects, and the containment
-    edges of the object hierarchy (a "grid" diagram is edge-less by
-    definition, so no edges are derived at all)  */
+    edges of the object hierarchy (a "grid" and a "layout" diagram are
+    edge-less by definition, so no edges are derived at all)  */
 const deriveEdges = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType,
     nodes: SpecObject[], nodeSet: Set<SpecObject>, edgeObjects: SpecObject[],
     errors: DiagramError[]): DiagramEdge[] => {
     const edges = new Array<DiagramEdge>()
-    if (type !== "grid") {
+    if (type !== "grid" && type !== "layout") {
         edges.push(...deriveReferenceEdges(ctx, diagram, nodes, nodeSet))
         edges.push(...deriveObjectEdges(ctx, diagram, nodeSet, edgeObjects, errors))
 
@@ -360,7 +419,7 @@ const deriveEdges = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramT
     else {
         for (const field of [ "edges", "hierarchy", "deep", "labeled", "onlyConnected" ] as const)
             if (diagram[field] !== undefined && diagram[field] !== false)
-                errors.push({ reason: "\"grid\" diagram cannot carry " +
+                errors.push({ reason: `"${type}" diagram cannot carry ` +
                     `${(/^[aeiou]/).test(field) ? "an" : "a"} "${field}" configuration` })
     }
     return edges
@@ -674,6 +733,19 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
     /*  determine the node objects and the edge objects (default: none),
         with the edge objects never acting as nodes themselves  */
     let nodes = deriveNodes(index, object, diagram, errors)
+
+    /*  a "layout" diagram consists of the node objects carrying a valid
+        cell span only (e.g. the fields of a binary format), so the
+        object itself and its remaining descendants drop out  */
+    const cells = diagram.cells
+    if (type === "layout") {
+        if (cells === undefined)
+            errors.push({ reason: "\"layout\" diagram requires a \"cells\" configuration" })
+        else
+            nodes = nodes.filter((node) => cellSpanOf(ctx.parenProps, node, cells) !== undefined)
+    }
+    else if (cells !== undefined)
+        errors.push({ reason: `"${type}" diagram cannot carry a "cells" configuration` })
     const edgeObjects = diagram.edges !== undefined ? resolvePatterns(index, errors, diagram.edges, "edges") : []
     const edgeSet     = new Set<SpecObject>(edgeObjects)
     nodes = nodes.filter((node) => !edgeSet.has(node))
@@ -693,7 +765,7 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
     const derived: DiagramCenter | undefined = type === "hub" ?
         deriveCenter(ctx, object, diagram, nodes, nodeSet, errors) : { center: object }
     if (derived === undefined)
-        return { errors }
+        return { type, errors }
     const { center, centerUrl } = derived
 
     /*  synthesize the center edges of a "hub" diagram, as the nodes
@@ -720,8 +792,8 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         which Gradia rejects, as the nesting already shows them  */
     let nesting: DiagramNesting = { parentOf: new Map(), containers: new Set() }
     if (diagram.nest !== undefined) {
-        if (type === "hub")
-            errors.push({ reason: "\"hub\" diagram cannot carry a \"nest\" configuration" })
+        if (type === "hub" || type === "layout")
+            errors.push({ reason: `"${type}" diagram cannot carry a "nest" configuration` })
         else {
             nesting = deriveNesting(ctx, diagram.nest, nodes, nodeSet, errors)
             if (diagram.nest.crossing !== undefined && diagram.nest.crossing !== "nodes")
@@ -746,7 +818,7 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         nodes = nodes.filter((node) => connected.has(node))
     }
     if (errors.length > 0)
-        return { errors }
+        return { type, errors }
 
     /*  an empty node set silently omits the diagram, as a wildcard
         "nodes" pattern legitimately matches nothing when an optional
@@ -755,21 +827,23 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         such a diagram carries no information beyond the object itself  */
     if (nodes.length === 0
         || (diagram.collapse !== false && nodes.length === 1 && edges.length === 0))
-        return { errors }
+        return { type, errors }
 
-    return { spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting),
-        config: { ...diagramPresets, ...diagram.config }, columns, errors }
+    const config = diagramConfig(ctx, diagram, type, nodes)
+    return { type, spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting, config),
+        config, columns, errors }
 }
 
 /*  the memoized diagram derivations, keyed by specification, as the
     lint validation and every renderer of an export derive the very
     same diagrams of the very same parsed specification again  */
-const derivations = new WeakMap<Spec, { config: Schema, results: Map<SpecObject, DiagramResult> }>()
+const derivations = new WeakMap<Spec, { config: Schema, results: Map<SpecObject, DiagramResult[]> }>()
 
 /*  derive the Gradia specs of all diagram-configured objects
-    of a specification (memoized per specification and schema)  */
+    of a specification, one per configured diagram of the kind of
+    an object (memoized per specification and schema)  */
 export const specDiagrams = (specification: Spec,
-    config: Schema): Map<SpecObject, DiagramResult> => {
+    config: Schema): Map<SpecObject, DiagramResult[]> => {
     const derived = derivations.get(specification)
     if (derived !== undefined && derived.config === config)
         return derived.results
@@ -787,35 +861,32 @@ export const specDiagrams = (specification: Spec,
         name tokens, as the derivation sees the AST alone, while the
         parsing context holding them is long gone by export time  */
     const ctx     = { index, anchors, positions, parents, parenProps: collectParenProps(schemas) }
-    const results = new Map<SpecObject, DiagramResult>()
-    for (const [ object, schema ] of schemas)
-        if (schema.diagram !== undefined)
-            results.set(object, deriveDiagram(ctx, object, schema.diagram))
+    const results = new Map<SpecObject, DiagramResult[]>()
+    for (const [ object, schema ] of schemas) {
+        const diagrams = diagramsOf(schema)
+        if (diagrams.length > 0)
+            results.set(object, diagrams.map((diagram) => deriveDiagram(ctx, object, diagram)))
+    }
     derivations.set(specification, { config, results })
     return results
 }
 
-/*  determine the diagram-configured objects whose diagrams the given
-    aspects omit: the ones of a diagram type and the ones from an object
-    tree nesting level on (the top-level objects being level 1)  */
-export const omittedDiagrams = (specification: Spec, config: Schema,
-    omit: Set<OmitAspect>): Set<SpecObject> => {
-    const omitted = new Set<SpecObject>()
+/*  determine whether the given aspects omit a diagram of a type of an
+    object: by its type, or by the object tree nesting level of the
+    object (the top-level objects being level 1)  */
+export const omittedDiagrams = (specification: Spec,
+    omit: Set<OmitAspect>): (object: SpecObject, type: DiagramType) => boolean => {
     if (omit.size === 0)
-        return omitted
-    const schemas = collectSchemas(specification, config)
+        return () => false
+    const levels = new Map<SpecObject, number>()
     for (const node of buildLinkIndex(specification)) {
-        const diagram = schemas.get(node.object)?.diagram
-        if (diagram === undefined)
-            continue
         let level = 1
         for (let parent = node.parent; parent !== undefined; parent = parent.parent)
             level++
-        if (omit.has(`diagram:${diagram.type ?? "graph"}`)
-            || ([ 1, 2, 3 ] as const).some((n) => n <= level && omit.has(`diagram:${n}`)))
-            omitted.add(node.object)
+        levels.set(node.object, level)
     }
-    return omitted
+    return (object, type) => omit.has(`diagram:${type}`)
+        || ([ 1, 2, 3 ] as const).some((n) => n <= (levels.get(object) ?? 1) && omit.has(`diagram:${n}`))
 }
 
 /*  the in-memory cache of the rendered diagram SVGs, keyed by Gradia
@@ -833,13 +904,16 @@ let svgCache = new Map<string, string>()
     afterwards swept to the diagrams of this very rendering, so it never
     grows beyond a single document; the omitted diagrams are skipped  */
 export const renderDiagrams = async (specification: Spec, config: Schema,
-    verbose?: Verbose, omit = new Set<OmitAspect>()): Promise<Map<SpecObject, DiagramResult & { svg: string }>> => {
+    verbose?: Verbose, omit = new Set<OmitAspect>()): Promise<Map<SpecObject, (DiagramResult & { svg: string })[]>> => {
     const cache    = new Map<string, string>()
-    const rendered = new Map<SpecObject, DiagramResult & { svg: string }>()
-    const omitted  = omittedDiagrams(specification, config, omit)
+    const rendered = new Map<SpecObject, (DiagramResult & { svg: string })[]>()
+    const omitted  = omittedDiagrams(specification, omit)
     let   cached   = 0
-    for (const [ object, result ] of specDiagrams(specification, config)) {
-        if (result.spec === undefined || omitted.has(object))
+    let   count    = 0
+    const entries  = Array.from(specDiagrams(specification, config))
+        .flatMap(([ object, results ]) => results.map((result) => ({ object, result })))
+    for (const { object, result } of entries) {
+        if (result.spec === undefined || omitted(object, result.type))
             continue
         const key = result.spec + JSON.stringify(result.config ?? {})
         let   svg = svgCache.get(key) ?? cache.get(key)
@@ -857,13 +931,14 @@ export const renderDiagrams = async (specification: Spec, config: Schema,
             }
         }
         cache.set(key, svg)
-        rendered.set(object, { ...result, svg })
+        rendered.set(object, [ ...(rendered.get(object) ?? []), { ...result, svg } ])
+        count++
     }
     svgCache = cache
-    if (cached > 0 && cached === rendered.size)
+    if (cached > 0 && cached === count)
         verbose?.(`reusing ${literal(cached)} cached diagram(s)`)
     else
-        verbose?.(`rendering ${literal(rendered.size)} diagram(s) (${literal(cached)} cached)`)
+        verbose?.(`rendering ${literal(count)} diagram(s) (${literal(cached)} cached)`)
     return rendered
 }
 
@@ -872,8 +947,8 @@ export const renderDiagrams = async (specification: Spec, config: Schema,
 export const validateDiagrams = (ctx: ParseContext, specification: Spec,
     config: Schema) => {
     const seen = new Set<string>()
-    for (const [ object, result ] of specDiagrams(specification, config))
-        for (const error of result.errors) {
+    for (const [ object, results ] of specDiagrams(specification, config))
+        for (const error of results.flatMap((result) => result.errors)) {
             /*  attribute an edge object situation to the offending edge
                 object itself and report it just once, as a wildcard
                 "edges" pattern lets every diagram walk the very same

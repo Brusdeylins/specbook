@@ -204,22 +204,28 @@
 
                 A type is also the format of a message of a `Protocol` interface or of the content
                 of a `File` interface: its `ENCODING` and `ENDIANNESS` state how it is serialized,
-                and the `OFFSET` and `SIZE` of its fields state their exact position within a
-                binary layout.
+                and the `OFFSET`, `SIZE`, and `VALUE` of its fields state their exact position and
+                fixed content within a binary layout, which the layout diagram of the type draws
+                as cells beside its hub diagram.
             optional: true
             mixins:
                 -   EVIDENCE
             diagram:
-                type: hub
-                center: self
-                nodes: "[[TYPE:*]], [[INTERFACE:*]], [[ENDPOINT:*]], [[STRUCTURE:*]],
-                    [[ALGORITHM:*]], [[STAGE:*]], [[SYMBOL:*]]"
-                deep: true
-                labeled: true
-                qualified: true
-                config:
-                    size-node-width-max: 600
-                    size-node-height-scale: 1.75
+                -   type: hub
+                    center: self
+                    nodes: "[[TYPE:*]], [[INTERFACE:*]], [[ENDPOINT:*]], [[STRUCTURE:*]],
+                        [[ALGORITHM:*]], [[STAGE:*]], [[SYMBOL:*]]"
+                    deep: true
+                    labeled: true
+                    qualified: true
+                    config:
+                        size-node-width-max: 600
+                        size-node-height-scale: 1.75
+                -   type: layout
+                    cells:
+                        offset: OFFSET
+                        size: SIZE
+                        value: VALUE
             props:
                 -   name: INTERFACES
                     desc: >
@@ -338,6 +344,16 @@
                                 for a field whose size another field states; omitted for a
                                 textual encoding.
                             value: /\d+(?:\s*bit)?|variable/
+                            optional: true
+                        -   name: VALUE
+                            desc: >
+                                The fixed value every instance of the field carries in a
+                                binary layout (e.g. the magic number `0x1F8B`, the version
+                                `3`, the reserved bits `0000`), which the layout diagram of
+                                the type shows inside the cells of the field, as opposed to
+                                the `DEFAULT`, which an instance may override; omitted for
+                                a field whose value varies.
+                            value: /.+/
                             optional: true
                 -   kind: CONSTANT
                     name: "[A-Za-z_][A-Za-z0-9_-]*"

@@ -130,3 +130,50 @@ test("HTML export renders the new artifacts with their diagrams", async () => {
     assert.ok((text.match(/data-type=graph|data-type="graph"/g) ?? []).length >= 2)
     assert.ok((text.match(/data-type=hub|data-type="hub"/g) ?? []).length >= 3)
 })
+
+test("a binary format type derives a hub and a layout diagram", async () => {
+    const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "json" ] })
+    const spec = JSON.parse(json.toString("utf8"))
+    const diagrams = objectOf(spec, "TYPE", "RecordFrame").diagram
+    assert.ok(Array.isArray(diagrams) && diagrams.length === 2)
+    assert.match(diagrams[0], /^#type hub/)
+    assert.match(diagrams[1], /^#type layout/)
+
+    /*  a field off the byte boundary switches to bit cells, 32 per row,
+        the offsets and sizes being converted into such cells  */
+    assert.match(diagrams[1], /#config layout-cell-bits 1\n/)
+    assert.match(diagrams[1], /#config layout-row-cells 32\n/)
+    assert.match(diagrams[1], /FIELD-magic: magic \[ [^\]]*offset: 0, size: 16, value: 0x52F1 \]/)
+    assert.match(diagrams[1], /FIELD-urgent: urgent \[ [^\]]*offset: 20, size: 1 \]/)
+    assert.match(diagrams[1], /FIELD-payload: payload \[ [^\]]*offset: 64, size: "\*" \]/)
+})
+
+test("a byte-aligned format uses byte cells", async () => {
+    const basedir = variant("15-APIS-ID-Interface-Datatypes.md",
+        "-   version; TYPE: `integer`; OFFSET: 2; SIZE: 4 bit; VALUE: `0001`;\n" +
+        "    The version of the frame layout, BECAUSE the layout may evolve.\n\n" +
+        "-   urgent; TYPE: `boolean`; OFFSET: 2.4; SIZE: 1 bit;\n",
+        "-   version; TYPE: `integer`; OFFSET: 2; SIZE: 1;\n" +
+        "    The version of the frame layout, BECAUSE the layout may evolve.\n\n" +
+        "-   urgent; TYPE: `boolean`; OFFSET: 3; SIZE: 1;\n")
+    const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir, formats: [ "json" ] })
+    const layout = objectOf(JSON.parse(json.toString("utf8")), "TYPE", "RecordFrame").diagram[1]
+    assert.match(layout, /#config layout-cell-bits 8\n/)
+    assert.match(layout, /#config layout-row-cells 16\n/)
+    assert.match(layout, /FIELD-length: length \[ [^\]]*offset: 4, size: 4 \]/)
+})
+
+test("omitting layout diagrams keeps the hub diagram", async () => {
+    const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "json" ],
+        omit: [ "diagram:layout" ] })
+    const diagram = objectOf(JSON.parse(json.toString("utf8")), "TYPE", "RecordFrame").diagram
+    assert.equal(typeof diagram, "string")
+    assert.match(diagram, /^#type hub/)
+})
+
+test("HTML export renders both diagrams of a type and the layout fold control", async () => {
+    const [ html ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "html" ] })
+    const text = html.toString("utf8")
+    assert.ok(/data-type=["]?layout/.test(text))
+    assert.ok(text.includes("fold-layouts"))
+})
