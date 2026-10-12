@@ -119,12 +119,13 @@ export type SchemaDiagramLayers = {
     its node/edge selection, the edge property roles, the derivation
     switches, the node nesting, and the node annotations  */
 export type SchemaDiagram = {
-    type?:             "graph" | "hub" | "grid" | "layout" | "layer"
+    type?:             "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"
     nodes?:            string
     edges?:            string
     center?:           string | SchemaDiagramCenter
     centerEdges?:      SchemaDiagramCenterEdges
     links?:            "props" | "all"
+    linkProps?:        string[]
     labeled?:          boolean
     edgeSource?:       string
     edgeTarget?:       string
@@ -244,12 +245,13 @@ const SchemaDiagramLayers: v.GenericSchema<SchemaDiagramLayers> = v.strictObject
     value:             v.string()
 })
 const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
-    type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout", "layer" ])),
+    type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout", "layer", "matrix" ])),
     nodes:             v.optional(v.string()),
     edges:             v.optional(v.string()),
     center:            v.optional(v.union([ v.string(), SchemaDiagramCenter ])),
     centerEdges:       v.optional(SchemaDiagramCenterEdges),
     links:             v.optional(v.picklist([ "props", "all" ])),
+    linkProps:         v.optional(v.pipe(v.array(v.string()), v.minLength(1))),
     labeled:           v.optional(v.boolean()),
     edgeSource:        v.optional(v.string()),
     edgeTarget:        v.optional(v.string()),

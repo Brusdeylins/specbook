@@ -181,7 +181,7 @@ test("HTML export renders both diagrams of a type and the layout fold control", 
 test("the functionality view derives a layer diagram from the Layer components", async () => {
     const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "json" ] })
     const diagrams = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram
-    assert.ok(Array.isArray(diagrams) && diagrams.length === 2)
+    assert.ok(Array.isArray(diagrams) && diagrams.length === 3)
     const layer = diagrams[1]
     assert.match(layer, /^#type layer/)
 
@@ -209,7 +209,19 @@ test("a functionality view without layers omits the layer diagram", async () => 
     fs.writeFileSync(file, fs.readFileSync(file, "utf8")
         .replace("-   KIND: Layer\n\nThe layer holding", "-   KIND: Subsystem\n\nThe layer holding"), "utf8")
     const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir, formats: [ "json" ] })
-    const diagram = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram
-    assert.equal(typeof diagram, "string")
-    assert.match(diagram, /^#type graph/)
+    const diagrams = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram
+    assert.deepEqual(diagrams.map((spec) => spec.split("\n")[0]), [ "#type graph", "#type matrix" ])
+})
+
+test("the functionality view derives a dependency matrix of the DEPENDS-ON references", async () => {
+    const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "json" ] })
+    const matrix = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram[2]
+    assert.match(matrix, /^#type matrix/)
+
+    /*  only the components carrying a dependency remain (the layers
+        drop out), and the "PART-OF" references derive no edges  */
+    assert.doesNotMatch(matrix, /COMPONENT-access-layer:|COMPONENT-core-layer:/)
+    assert.match(matrix, /COMPONENT-gateway --> ARCH-FV\.COMPONENT-ingest/)
+    assert.match(matrix, /COMPONENT-ingest --> ARCH-FV\.COMPONENT-gateway/)
+    assert.doesNotMatch(matrix, /-layer\n/)
 })

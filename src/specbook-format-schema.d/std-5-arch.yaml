@@ -377,6 +377,11 @@
                 value: Layer
             properties:
                 -   KIND
+        -   type: matrix
+            nodes: "[[FV.COMPONENT:*]]"
+            linkProps:
+                -   DEPENDS-ON
+            onlyConnected: true
     children:
         -   kind: COMPONENT
             desc: >
