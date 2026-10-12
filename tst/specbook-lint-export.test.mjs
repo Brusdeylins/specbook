@@ -248,3 +248,14 @@ test("the test cases derive a traceability matrix of requirements and test cases
     assert.doesNotMatch(matrix, /TEST-CASE-valid-token: [^\n]*trace: indirect/)
     assert.doesNotMatch(matrix, /TEST-CASE-no-accounts: [^\n]*trace: indirect/)
 })
+
+test("the layers of the sample nest into groups and the datastore is drawn as a database", async () => {
+    const [ json ] = await new SpecBook().export({ config: [ "std" ],
+        basedir: path.join(root, "smp", "broadcast"), formats: [ "json" ] })
+    const layer = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram[1]
+    assert.match(layer, /#config layer-numbered true\n/)
+    assert.match(layer, /COMPONENT-relay: Relay \[ [^\]]*layer: "Relay Layer", layer-group: "Server Layers\/Broker Layers"/)
+    assert.match(layer, /COMPONENT-database: Database \[ [^\]]*layer: "Database Layer", layer-group: "Server Layers", shape: database/)
+    assert.match(layer, /COMPONENT-auth: "Authentication Service" \[ [^\]]*layer: "Service Layer"/)
+    assert.doesNotMatch(layer, /COMPONENT-server-layers:/)
+})

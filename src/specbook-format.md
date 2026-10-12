@@ -119,6 +119,12 @@ type SchemaDiagramLayers = {
     property:          string
     value:             string
 }
+type SchemaDiagramShape = {
+    property:          string
+    value:             string
+    shape:             "box" | "database" | "queue" | "cloud" |
+                       "stack" | "person" | "device"
+}
 type SchemaDiagram = {
     type?:             "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"
     nodes?:            string
@@ -139,6 +145,7 @@ type SchemaDiagram = {
     qualified?:        boolean
     cells?:            SchemaDiagramCells
     layers?:           SchemaDiagramLayers
+    shapes?:           SchemaDiagramShape[]
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -517,6 +524,15 @@ type SchemaGradiaConfig = Partial<{
     `Layer`), which then becomes a band instead of a node,
     BECAUSE the layers are ordinary objects of the specification
 
+-   `SchemaDiagram.shapes?: SchemaDiagramShape[]`:
+    rules drawing the nodes with another outline: the first rule whose
+    `property` carries the `value` (or a value matching it as a `/xxx/`
+    regular expression) gives the `shape` of a node, `database` (a
+    cylinder), `queue` (a lying cylinder), `cloud`, `stack` (several
+    instances), `person`, `device`, or the default `box`,
+    BECAUSE a datastore, an external service, or a pool of instances is
+    recognized at a glance by its familiar symbol
+
 -   `SchemaDiagramCells.value?: string`:
     property carrying the fixed value of a node, shown inside its cells,
     BECAUSE a magic number or a reserved bit pattern is part of the structure
@@ -750,7 +766,12 @@ in the band of the first layer it reaches through the references of the
 `via` property (followed transitively), and an edge pointing from a
 lower layer to a higher one, i.e. against the layering, is drawn dashed
 in the violation color. A `layer` diagram without any layered node is
-omitted, and it accepts neither a `center` nor a `nest`.
+omitted, and it accepts neither a `center` nor a `nest`. A layer
+reaching another layer through the `via` references belongs to that
+one as to a group, so the layers nest into groups (e.g. the `Router`,
+`Proxy`, and `Relay` layers into a `Broker` group within a `Server`
+group), drawn as columns left of the bands, and the Gradia option
+`layer-numbered` of the `config` numbers the layers top-down.
 
 A `matrix` diagram draws a dependency structure matrix: its nodes are
 both its rows and its columns (in the order of the `nodes` patterns, or
