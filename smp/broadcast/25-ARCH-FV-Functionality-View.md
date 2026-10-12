@@ -7,9 +7,68 @@ Modified: 2026-09-05 01:00
 
 ![](25-ARCH-FV-Functionality-View-1.svg)
 
+##  COMPONENT: Client Layer {{client-layer}}
+
+-   KIND:           Layer
+
+The layer running in the browsers of the attendees and operators, BECAUSE the user interface is delivered as a web
+application to arbitrary devices.
+
+##  COMPONENT: Server Layers {{server-layers}}
+
+-   KIND:           Layer
+
+The group of all layers running in the data center, BECAUSE everything behind the browser is operated by the solution
+itself.
+
+##  COMPONENT: Broker Layers {{broker-layers}}
+
+-   KIND:           Layer
+-   PART-OF:        [[COMPONENT:server-layers]]
+
+The group of the layers carrying the live connections of the clients, BECAUSE routing, proxying, and relaying form one
+connection path scaled independently of the business logic.
+
+##  COMPONENT: Router Layer {{router-layer}}
+
+-   KIND:           Layer
+-   PART-OF:        [[COMPONENT:broker-layers]]
+
+The layer distributing the incoming connections, BECAUSE a single entry point per data center balances the load.
+
+##  COMPONENT: Proxy Layer {{proxy-layer}}
+
+-   KIND:           Layer
+-   PART-OF:        [[COMPONENT:broker-layers]]
+
+The layer terminating and forwarding the client protocols, BECAUSE TLS and the protocol dispatch belong in front of
+the relays.
+
+##  COMPONENT: Relay Layer {{relay-layer}}
+
+-   KIND:           Layer
+-   PART-OF:        [[COMPONENT:broker-layers]]
+
+The layer fanning out the live messages, BECAUSE the MQTT brokers carry the bulk of the connections.
+
+##  COMPONENT: Service Layer {{service-layer}}
+
+-   KIND:           Layer
+-   PART-OF:        [[COMPONENT:server-layers]]
+
+The layer holding the business logic, BECAUSE it is the only one deciding about the domain.
+
+##  COMPONENT: Database Layer {{database-layer}}
+
+-   KIND:           Layer
+-   PART-OF:        [[COMPONENT:server-layers]]
+
+The layer holding the persistent state, BECAUSE the data outlives every process of the layers above.
+
 ##  COMPONENT: Web Client {{client}}
 
 -   KIND:           Subsystem
+-   PART-OF:        [[COMPONENT:client-layer]]
 -   REALIZES:       [[REQUIREMENT:name-appearance]], [[REQUIREMENT:browser-access]], [[REQUIREMENT:individual-url]], [[REQUIREMENT:user-consent]], [[REQUIREMENT:provider-switch]]
 -   DEPENDS-ON:     [[COMPONENT:relay]]
 
@@ -29,6 +88,7 @@ before it is sent, BECAUSE filtering at the source reduces server load and can p
 ##  COMPONENT: Router {{router}}
 
 -   KIND:           Connector
+-   PART-OF:        [[COMPONENT:router-layer]]
 -   PATTERNS:       [[PATTERN:reverse-proxy-edge]]
 
 The router (HAProxy with NFTables) routes incoming HTTP and WebSocket traffic across the proxy instances of an environment
@@ -38,6 +98,7 @@ isolated at the edge.
 ##  COMPONENT: Proxy {{proxy}}
 
 -   KIND:           Connector
+-   PART-OF:        [[COMPONENT:proxy-layer]]
 -   PATTERNS:       [[PATTERN:reverse-proxy-edge]], [[PATTERN:stateless-pool]]
 -   DEPENDS-ON:     [[COMPONENT:relay]]
 
@@ -47,6 +108,7 @@ horizontally per environment, BECAUSE request handling must scale independently 
 ##  COMPONENT: Relay {{relay}}
 
 -   KIND:           Connector
+-   PART-OF:        [[COMPONENT:relay-layer]]
 -   PATTERNS:       [[PATTERN:pub-sub]], [[PATTERN:stateless-pool]]
 -   DEPENDS-ON:     [[COMPONENT:service]]
 
@@ -57,6 +119,7 @@ performance challenge.
 ##  COMPONENT: Service {{service}}
 
 -   KIND:           Service
+-   PART-OF:        [[COMPONENT:service-layer]]
 -   PATTERNS:       [[PATTERN:modular-monolith]]
 -   REALIZES:       [[REQUIREMENT:questions]], [[REQUIREMENT:chat]], [[REQUIREMENT:moderation]], [[REQUIREMENT:forward-presenter]], [[REQUIREMENT:config-propagation]]
 -   OWNS:           [[ENTITY:Event]], [[ENTITY:AgendaPoint]], [[ENTITY:Channel]], [[ENTITY:Resource]], [[ENTITY:ResourceProviderParam]], [[ENTITY:Role]], [[ENTITY:Message]], [[ENTITY:MessageText]], [[ENTITY:QuestionTag]]
@@ -103,6 +166,7 @@ the event's lifetime.
 ##  COMPONENT: Junction Orchestrator {{junction}}
 
 -   KIND:           Component
+-   PART-OF:        [[COMPONENT:proxy-layer]]
 -   REALIZES:       [[REQUIREMENT:browser-access]]
 
 The Junction component serves the static client bundle and orchestrates its delivery to the relay over MQTT+, BECAUSE the
@@ -110,7 +174,8 @@ client must be distributed alongside the same messaging infrastructure used for 
 
 ##  COMPONENT: Database {{database}}
 
--   KIND:           Component
+-   KIND:           Datastore
+-   PART-OF:        [[COMPONENT:database-layer]]
 
 The PostgreSQL database with the filesystem persists all business objects and static assets, storing all events, messages,
 tokens, and statistics accessed through the Drizzle persistence layer, BECAUSE the authoritative, durable state of every

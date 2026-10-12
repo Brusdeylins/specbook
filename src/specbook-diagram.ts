@@ -137,6 +137,30 @@ const layerOf = (ctx: DiagramContext, node: SpecObject, layers: SchemaDiagramLay
     return undefined
 }
 
+/*  the nested groups of a layer of a "layer" diagram: the layers
+    reached from it through the references of the "via" property,
+    outermost first (e.g. a "Broker" group within a "Server" group)  */
+const layerGroupsOf = (ctx: DiagramContext, layer: SpecObject, layers: SchemaDiagramLayers): SpecObject[] => {
+    const groups = new Array<SpecObject>()
+    for (let group = layerOf(ctx, layer, layers); group !== undefined && !groups.includes(group);
+        group = layerOf(ctx, group, layers))
+        groups.unshift(group)
+    return groups
+}
+
+/*  the shape of a node of a diagram: the one of the first shape rule
+    whose property carries its value (or a value matching its "/xxx/"
+    regular expression), if any  */
+const shapeOfNode = (ctx: DiagramContext, diagram: SchemaDiagram, node: SpecObject): string | undefined =>
+    diagram.shapes?.find((rule) => {
+        const value = propValue(ctx.parenProps, node, rule.property)
+        if (value === undefined)
+            return false
+        const text = plainText(value).trim()
+        const m    = /^\/(.*)\/$/.exec(rule.value)
+        return m !== null ? new RegExp(`^(?:${m[1]})$`).test(text) : text === rule.value
+    })?.shape
+
 /*  the Gradia rendering options of a diagram: the presets, for a
     "layout" diagram the cell granularity its nodes demand (bit cells,
     32 per row, as soon as a node is not byte-aligned, byte cells, 16
@@ -281,10 +305,21 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
         if (indirect.has(node))
             attrs.push("trace: indirect")
 
-        /*  the layer of a "layer" node, by the name of its layer object  */
+        /*  the layer of a "layer" node, by the name of its layer object,
+            and the path of the groups of the layer  */
         const layer = layers.get(node)
-        if (layer !== undefined)
+        if (layer !== undefined) {
             attrs.push(`layer: ${atom(plainText(layer.name))}`)
+            const groups = diagram.layers !== undefined ? layerGroupsOf(ctx, layer, diagram.layers) : []
+            if (groups.length > 0)
+                attrs.push(`layer-group: ${atom(groups.map((group) =>
+                    plainText(group.name).replace(/\//g, "-")).join("/"))}`)
+        }
+
+        /*  the outline of the node, by the shape rules  */
+        const shape = shapeOfNode(ctx, diagram, node)
+        if (shape !== undefined && shape !== "box")
+            attrs.push(`shape: ${shape}`)
 
         /*  the cell span of a "layout" node, in cells of the configured
             granularity (a variable size spanning the rest of its row)  */

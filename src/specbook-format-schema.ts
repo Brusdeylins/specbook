@@ -115,6 +115,15 @@ export type SchemaDiagramLayers = {
     value:             string
 }
 
+/*  a rule drawing the nodes of a diagram with another outline: the
+    nodes carrying the value (or a value matching the "/xxx/" regular
+    expression) in the property get the shape  */
+export type SchemaDiagramShape = {
+    property:          string
+    value:             string
+    shape:             "box" | "database" | "queue" | "cloud" | "stack" | "person" | "device"
+}
+
 /*  the diagram derived for every object of an object kind: its shape,
     its node/edge selection, the edge property roles, the derivation
     switches, the node nesting, and the node annotations  */
@@ -140,6 +149,7 @@ export type SchemaDiagram = {
     nest?:             SchemaDiagramNest
     cells?:            SchemaDiagramCells
     layers?:           SchemaDiagramLayers
+    shapes?:           SchemaDiagramShape[]
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -245,6 +255,11 @@ const SchemaDiagramLayers: v.GenericSchema<SchemaDiagramLayers> = v.strictObject
     property:          v.string(),
     value:             v.string()
 })
+const SchemaDiagramShape: v.GenericSchema<SchemaDiagramShape> = v.strictObject({
+    property:          v.string(),
+    value:             v.string(),
+    shape:             v.picklist([ "box", "database", "queue", "cloud", "stack", "person", "device" ])
+})
 const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
     type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout", "layer", "matrix" ])),
     nodes:             v.optional(v.string()),
@@ -267,6 +282,7 @@ const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
     nest:              v.optional(SchemaDiagramNest),
     cells:             v.optional(SchemaDiagramCells),
     layers:            v.optional(SchemaDiagramLayers),
+    shapes:            v.optional(v.pipe(v.array(SchemaDiagramShape), v.minLength(1))),
     properties:        v.optional(v.array(v.string())),
     config:            v.optional(SchemaDiagramConfig)
 })

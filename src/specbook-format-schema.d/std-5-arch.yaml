@@ -243,6 +243,19 @@
             both:     Bidirectional
             via:      VIA
         qualified: true
+        shapes:
+            -   property: KIND
+                value: Person
+                shape: person
+            -   property: KIND
+                value: Service
+                shape: cloud
+            -   property: KIND
+                value: Datastore
+                shape: database
+            -   property: KIND
+                value: Device
+                shape: device
         properties:
             -   KIND
     children:
@@ -367,6 +380,10 @@
             nest:
                 properties:
                     -   PART-OF
+            shapes:
+                -   property: KIND
+                    value: Datastore
+                    shape: database
             properties:
                 -   KIND
         -   type: layer
@@ -375,8 +392,14 @@
                 via: PART-OF
                 property: KIND
                 value: Layer
+            shapes:
+                -   property: KIND
+                    value: Datastore
+                    shape: database
             properties:
                 -   KIND
+            config:
+                layer-numbered: true
         -   type: matrix
             nodes: "[[FV.COMPONENT:*]]"
             linkProps:
@@ -425,14 +448,17 @@
                         -   `Connector`: Mediator that conveys interactions between components
                                          (e.g. bus, gateway).
                         -   `Subsystem`: Larger composite grouping several components.
+                        -   `Datastore`: Component holding the persistent data of the solution
+                                         (e.g. a database, a file store), drawn as a cylinder.
                         -   `Layer`:     Horizontal stratum of a layered architecture, grouping
                                          the components of one level of abstraction, where the
                                          layers are ordered top-down in document order and a
                                          component may depend on the components of its own and
                                          of the lower layers only (the layer diagram of the
                                          Functionality View marks every dependency pointing
-                                         upwards).
-                    value: enum(Component,Service,Module,Connector,Subsystem,Layer)
+                                         upwards), where a layer `PART-OF` another one is
+                                         a sub-layer and the outer one a group of layers.
+                    value: enum(Component,Service,Module,Connector,Subsystem,Datastore,Layer)
                 -   name: PART-OF
                     desc: >
                         Reference to the FUNCTIONALITY-VIEW object this component is contained
@@ -984,6 +1010,10 @@
         type: graph
         nodes: "[[UNIT:*]]"
         labeled: true
+        shapes:
+            -   property: KIND
+                value: Pool
+                shape: stack
         properties:
             -   KIND
     children:
@@ -1540,6 +1570,16 @@
             properties:
                 -   PART-OF
                 -   TIER
+        shapes:
+            -   property: KIND
+                value: Cluster
+                shape: stack
+            -   property: KIND
+                value: Device
+                shape: device
+            -   property: KIND
+                value: Managed
+                shape: cloud
         properties:
             -   AREA
             -   KIND
