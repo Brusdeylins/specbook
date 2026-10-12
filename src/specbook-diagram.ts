@@ -235,7 +235,7 @@ interface DiagramNesting {
 const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType, center: SpecObject,
     centerUrl: string | undefined, nodes: SpecObject[], edges: DiagramEdge[], nesting: DiagramNesting,
     config: NonNullable<SchemaDiagram["config"]>, layers: Map<SpecObject, SpecObject>,
-    columns: Set<SpecObject>): string => {
+    columns: Set<SpecObject>, indirect: Set<SpecObject>): string => {
     const { index, anchors, positions, parenProps } = ctx
     const lines  = [ `#type ${type}` ]
     for (const [ key, value ] of Object.entries(config))
@@ -277,9 +277,12 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
         if (diagram.ordered === true)
             attrs.push(`order: ${orderOf(node)}`)
 
-        /*  the column of a traceability "matrix"  */
+        /*  the column of a traceability "matrix", and the row or column
+            related to the other side indirectly only  */
         if (columns.has(node))
             attrs.push("axis: column")
+        if (indirect.has(node))
+            attrs.push("trace: indirect")
 
         /*  the layer of a "layer" node, by the name of its layer object  */
         const layer = layers.get(node)
@@ -466,6 +469,49 @@ const deriveEdges = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramT
                     `${(/^[aeiou]/).test(field) ? "an" : "a"} "${field}" configuration` })
     }
     return edges
+}
+
+/*  the objects of a traceability matrix related to its other side
+    indirectly only: a row or column object without a direct trace which
+    reaches an object of the other side through the references of its
+    properties via exactly one intermediate object (e.g. a test case
+    verifying a rule which constrains a requirement), where a reached
+    object is lifted to its nearest ancestor-or-self of the other side,
+    and the reached object of the other side counts as indirectly
+    related, too  */
+const indirectTraces = (ctx: DiagramContext, rows: SpecObject[], columns: Set<SpecObject>,
+    edges: DiagramEdge[]): Set<SpecObject> => {
+    const direct = new Set<SpecObject>(edges.flatMap((edge) => [ edge.source, edge.target ]))
+    const refsOf = (object: SpecObject): SpecObject[] =>
+        propsOf(ctx.parenProps, object).flatMap((property) =>
+            Array.from(plainText(property.value).matchAll(referenceRegex), (m) =>
+                resolveUnique(ctx.index, m[1].trim(), object).target)
+                .filter((target): target is SpecObject => target !== undefined))
+    const liftInto = (object: SpecObject, set: Set<SpecObject>): SpecObject | undefined => {
+        let cur: SpecObject | undefined = object
+        while (cur !== undefined && !set.has(cur))
+            cur = ctx.parents.get(cur)
+        return cur
+    }
+    const rowSet   = new Set(rows)
+    const indirect = new Set<SpecObject>()
+    for (const [ from, other ] of [ ...Array.from(columns, (c) => [ c, rowSet ] as const),
+        ...rows.map((r) => [ r, columns ] as const) ]) {
+        for (const via of refsOf(from)) {
+            if (liftInto(via, other) !== undefined)
+                continue
+            for (const target of refsOf(via)) {
+                const reached = liftInto(target, other)
+                if (reached !== undefined) {
+                    indirect.add(from)
+                    indirect.add(reached)
+                }
+            }
+        }
+    }
+    for (const object of direct)
+        indirect.delete(object)
+    return indirect
 }
 
 /*  deduplicate the edges (a containment, object, or center edge can
@@ -865,6 +911,10 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         edges.push(...deriveCenterEdges(ctx, diagram.centerEdges, nodes, center, errors))
     edges = dedupEdges(edges, anchors)
 
+    /*  the indirect traces of a traceability matrix  */
+    const indirect = columnSet.size > 0 ?
+        indirectTraces(ctx, nodes.filter((node) => !columnSet.has(node)), columnSet, edges) : new Set<SpecObject>()
+
     /*  project a "hub" diagram onto its center object, which has
         to be part of the node set  */
     let columns: number | undefined
@@ -919,7 +969,7 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         return { type, errors }
 
     const config = diagramConfig(ctx, diagram, type, nodes)
-    return { type, spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting, config, layerMap, columnSet),
+    return { type, spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting, config, layerMap, columnSet, indirect),
         config, columns, errors }
 }
 

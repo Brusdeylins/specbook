@@ -239,4 +239,12 @@ test("the test cases derive a traceability matrix of requirements and test cases
     assert.match(matrix, /TEST-TC\.TEST-CASE-valid-token: "Valid Token Grants Access" \[ [^\]]*axis: column/)
     assert.match(matrix, /REQUIREMENT-authentication: "User Authentication" \[ url: [^\]]*\]\n/)
     assert.match(matrix, /TEST-CASE-valid-token --> [^\n]*REQUIREMENT-authentication/)
+
+    /*  a test case verifying a rule which constrains a requirement is
+        related to the requirements indirectly, and so is that requirement,
+        while a test case of a rule constraining nothing is not  */
+    assert.match(matrix, /TEST-CASE-initial-channel: [^\n]*trace: indirect/)
+    assert.match(matrix, /REQUIREMENT-provider-switch: [^\n]*\n/)
+    assert.doesNotMatch(matrix, /TEST-CASE-valid-token: [^\n]*trace: indirect/)
+    assert.doesNotMatch(matrix, /TEST-CASE-no-accounts: [^\n]*trace: indirect/)
 })
