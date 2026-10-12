@@ -106,11 +106,20 @@ export type SchemaDiagramCells = {
     value?:            string
 }
 
+/*  the layers of a "layer" diagram: the reference-valued property
+    followed transitively from a node object to the object acting as
+    its layer, which is recognized by the value of one of its properties  */
+export type SchemaDiagramLayers = {
+    via:               string
+    property:          string
+    value:             string
+}
+
 /*  the diagram derived for every object of an object kind: its shape,
     its node/edge selection, the edge property roles, the derivation
     switches, the node nesting, and the node annotations  */
 export type SchemaDiagram = {
-    type?:             "graph" | "hub" | "grid" | "layout"
+    type?:             "graph" | "hub" | "grid" | "layout" | "layer"
     nodes?:            string
     edges?:            string
     center?:           string | SchemaDiagramCenter
@@ -128,6 +137,7 @@ export type SchemaDiagram = {
     ordered?:          boolean
     nest?:             SchemaDiagramNest
     cells?:            SchemaDiagramCells
+    layers?:           SchemaDiagramLayers
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -228,8 +238,13 @@ const SchemaDiagramCells: v.GenericSchema<SchemaDiagramCells> = v.strictObject({
     size:              v.string(),
     value:             v.optional(v.string())
 })
+const SchemaDiagramLayers: v.GenericSchema<SchemaDiagramLayers> = v.strictObject({
+    via:               v.string(),
+    property:          v.string(),
+    value:             v.string()
+})
 const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
-    type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout" ])),
+    type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout", "layer" ])),
     nodes:             v.optional(v.string()),
     edges:             v.optional(v.string()),
     center:            v.optional(v.union([ v.string(), SchemaDiagramCenter ])),
@@ -247,6 +262,7 @@ const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
     ordered:           v.optional(v.boolean()),
     nest:              v.optional(SchemaDiagramNest),
     cells:             v.optional(SchemaDiagramCells),
+    layers:            v.optional(SchemaDiagramLayers),
     properties:        v.optional(v.array(v.string())),
     config:            v.optional(SchemaDiagramConfig)
 })

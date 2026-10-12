@@ -114,8 +114,13 @@ type SchemaDiagramCells = {
     size:              string
     value?:            string
 }
+type SchemaDiagramLayers = {
+    via:               string
+    property:          string
+    value:             string
+}
 type SchemaDiagram = {
-    type?:             "graph" | "hub" | "grid" | "layout"
+    type?:             "graph" | "hub" | "grid" | "layout" | "layer"
     nodes?:            string
     edges?:            string
     center?:           string | SchemaDiagramCenter
@@ -131,6 +136,7 @@ type SchemaDiagram = {
     collapse?:         boolean
     qualified?:        boolean
     cells?:            SchemaDiagramCells
+    layers?:           SchemaDiagramLayers
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -352,9 +358,10 @@ type SchemaGradiaConfig = Partial<{
     diagram derived for every object of an object kind,
     BECAUSE the relations of a specification are graspable only when drawn
 
--   `SchemaDiagram.type?: "graph" | "hub" | "grid" | "layout"`:
+-   `SchemaDiagram.type?: "graph" | "hub" | "grid" | "layout" | "layer"`:
     diagram shape: `graph` (free), `hub` (centered), `grid` (edge-less),
-    `layout` (the cells of a binary structure, edge-less),
+    `layout` (the cells of a binary structure, edge-less), `layer`
+    (stacked layers, marking the edges against the layering),
     BECAUSE one object set tells different stories as different shapes
 
 -   `SchemaDiagram.nodes?: string`:
@@ -478,6 +485,22 @@ type SchemaGradiaConfig = Partial<{
     property carrying the size of a node, in bytes or, with the unit
     `bit`, in bits, or `variable` (drawn up to the end of its row),
     BECAUSE a field spans as many cells as it occupies
+
+-   `SchemaDiagram.layers?: SchemaDiagramLayers`:
+    assignment of the node objects of a `layer` diagram to their layers
+    (required by and allowed for that type only),
+    BECAUSE a layering is a containment no reference of the nodes
+    states directly
+
+-   `SchemaDiagramLayers.via: string`:
+    reference-valued property followed transitively from a node to its
+    layer (e.g. `PART-OF`), whose references then derive no edges,
+    BECAUSE a node often sits in its layer only through a subsystem
+
+-   `SchemaDiagramLayers.property: string`, `SchemaDiagramLayers.value: string`:
+    property and value marking an object as a layer (e.g. `KIND` and
+    `Layer`), which then becomes a band instead of a node,
+    BECAUSE the layers are ordinary objects of the specification
 
 -   `SchemaDiagramCells.value?: string`:
     property carrying the fixed value of a node, shown inside its cells,
@@ -628,8 +651,9 @@ An object kind can additionally carry a `diagram` field, which derives
 a [Gradia](https://github.com/rse/gradia) diagram for every object of
 that kind (a list of them derives one diagram per entry, rendered one
 below the other). Its `type` selects the diagram shape (`graph`, `hub`,
-`grid`, or `layout`), `nodes` and `edges` select the participating objects through
-comma-separated `[[xxx]]` reference patterns (`nodes` defaults to the
+`grid`, `layout`, or `layer`), `nodes` and `edges` select the
+participating objects through comma-separated `[[xxx]]` reference
+patterns (`nodes` defaults to the
 object itself plus all objects below it), and `center` names the object
 a `hub` is projected onto (default: `self`). An edge object of the
 center targeting the center itself (a self-reference) places the center
@@ -703,6 +727,15 @@ the cells are bits, 32 per row, and otherwise bytes, 16 per row, which
 the Gradia options `layout-cell-bits` and `layout-row-cells` of the
 `config` override, while the offset of every row is shown beside it.
 A `layout` accepts neither a `center` nor a `nest`.
+
+A `layer` diagram draws a layered architecture: the node objects acting
+as layers (carrying the `value` in the `property` of `layers`) become
+bands stacked top-down in their document order, every other node sits
+in the band of the first layer it reaches through the references of the
+`via` property (followed transitively), and an edge pointing from a
+lower layer to a higher one, i.e. against the layering, is drawn dashed
+in the violation color. A `layer` diagram without any layered node is
+omitted, and it accepts neither a `center` nor a `nest`.
 
 ### Coverage
 
