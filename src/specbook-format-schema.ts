@@ -9,8 +9,21 @@ import { Gradia, type Config as GradiaConfig } from "@rse/gradia"
 
 /*  ==== Types ====  */
 
-/*  the whole schema: the object kinds the corpus consists of  */
+/*  the whole schema: the object kinds the corpus consists of (with
+    all mixins already expanded into the properties of the kinds)  */
 export type Schema = SchemaObject[]
+
+/*  the schema as configured: the object kinds plus the reusable
+    property groups (mixins) the kinds include by name  */
+export type SchemaConfig = (SchemaObject | SchemaMixin)[]
+
+/*  a reusable, named group of properties, which every object kind
+    listing it in its "mixins" receives as if declared itself  */
+export type SchemaMixin = {
+    mixin:             string
+    desc?:             string
+    props:             SchemaProperty[]
+}
 
 /*  an object kind: an artifact (level 1, with its "file" and exact
     "name") or an object nested below it (with a "name" regex), the
@@ -25,6 +38,7 @@ export type SchemaObject = {
     desc?:             string
     refs?:             string
     optional?:         boolean
+    mixins?:           string[]
     referenced?:       string[]
     coverage?:         string[]
     automaton?:        SchemaAutomaton
@@ -230,6 +244,7 @@ const SchemaObject: v.GenericSchema<SchemaObject> = v.strictObject({
     desc:              v.optional(v.string()),
     refs:              v.optional(v.string()),
     optional:          v.optional(v.boolean()),
+    mixins:            v.optional(v.pipe(v.array(v.string()), v.minLength(1))),
     referenced:        v.optional(v.pipe(v.array(v.string()), v.minLength(1))),
     coverage:          v.optional(v.pipe(v.array(v.string()), v.minLength(1))),
     automaton:         v.optional(SchemaAutomaton),
@@ -240,4 +255,17 @@ const SchemaObject: v.GenericSchema<SchemaObject> = v.strictObject({
 })
 export const Schema: v.GenericSchema<Schema> =
     v.pipe(v.array(SchemaObject), v.minLength(1))
+const SchemaMixin: v.GenericSchema<SchemaMixin> = v.strictObject({
+    mixin:             v.string(),
+    desc:              v.optional(v.string()),
+    props:             v.pipe(v.array(SchemaProperty), v.minLength(1))
+})
+
+/*  the configured schema validates an entry carrying a "mixin" field as
+    a mixin and every other one as an object kind, so the diagnostics of
+    an object kind stay as precise as without any mixins  */
+export const isSchemaMixin = (entry: unknown): boolean =>
+    typeof entry === "object" && entry !== null && !Array.isArray(entry) && "mixin" in entry
+export const SchemaConfig: v.GenericSchema<SchemaConfig> =
+    v.pipe(v.array(v.lazy((entry) => isSchemaMixin(entry) ? SchemaMixin : SchemaObject)), v.minLength(1))
 

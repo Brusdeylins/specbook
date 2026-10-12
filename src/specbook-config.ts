@@ -9,7 +9,8 @@ import { parseDocument, isNode, LineCounter, type Document } from "yaml"
 import * as v                                                from "valibot"
 import { mergeWith, isPlainObject }                          from "es-toolkit"
 
-import { Schema, type SchemaObject, type SchemaProperty }               from "./specbook-format-schema.js"
+import { SchemaConfig, isSchemaMixin, type Schema, type SchemaObject,
+    type SchemaMixin, type SchemaProperty }                             from "./specbook-format-schema.js"
 import { compileValueExpr, anchored, admitsReferences, type ValueExpr } from "./specbook-parse-value.js"
 import { type Diagnostic }                                              from "./specbook-diagnostic.js"
 
@@ -31,10 +32,10 @@ export const lineColOfPath = (doc: Document, lines: LineCounter, path: YamlPath)
 }
 
 /*  the identity by which the elements of the lists of the configuration
-    are matched on merging: the artifacts by their kind plus id or name
-    and the nested objects by their kind alone (exactly like the sibling
-    resolution), the properties by their name, and the scalar entries
-    by their value  */
+    are matched on merging: the artifacts by their kind plus id or name,
+    the mixins by their name, and the nested objects by their kind alone
+    (exactly like the sibling resolution), the properties by their name,
+    and the scalar entries by their value  */
 const identityOf = (item: unknown, list?: string): string => {
     if (!isPlainObject(item))
         return String(item)
@@ -43,6 +44,8 @@ const identityOf = (item: unknown, list?: string): string => {
         return String(object.name ?? "")
     else if (list === "children")
         return String(object.kind ?? "")
+    else if (isSchemaMixin(object))
+        return `mixin:${String(object.mixin)}`
     else
         return `${String(object.kind ?? "")}:${String(object.id ?? object.name ?? "")}`
 }
@@ -182,17 +185,29 @@ const checkProperties = (props: SchemaProperty[], at: YamlPath, diagnose: Diagno
     }
 }
 
+/*  the properties of an object kind: its own ones, followed by those of
+    its mixins (in their order) which it does not declare itself, as an
+    own declaration refines the one of a mixin  */
+const propsOf = (object: SchemaObject, mixins: Map<string, SchemaMixin>): SchemaProperty[] => {
+    const props = [ ...(object.props ?? []) ]
+    for (const name of object.mixins ?? [])
+        for (const prop of mixins.get(name)?.props ?? [])
+            if (!props.some((p) => p.name === prop.name))
+                props.push(prop)
+    return props
+}
+
 /*  check the automaton of an object (if any): it names the child kinds
     acting as nodes and edges, the reference-valued edge properties
     referencing the source and target nodes, and the node properties
     flagging the initial and final nodes  */
-const checkAutomaton = (object: SchemaObject, at: YamlPath, diagnose: Diagnose) => {
+const checkAutomaton = (object: SchemaObject, mixins: Map<string, SchemaMixin>, at: YamlPath, diagnose: Diagnose) => {
     if (object.automaton === undefined)
         return
     const automaton = object.automaton
     const childOf   = (kind: string) => (object.children ?? []).find((c) => c.kind === kind)
     const propOf    = (child: SchemaObject | undefined, name: string) =>
-        (child?.props ?? []).find((p) => p.name === name)
+        (child !== undefined ? propsOf(child, mixins) : []).find((p) => p.name === name)
     /*  an invalid value expression is reported on its own (see
         "checkProperties"), so it must not cascade into a shape diagnostic  */
     const isReference = (prop: SchemaProperty): boolean | undefined => {
@@ -229,12 +244,14 @@ const checkAutomaton = (object: SchemaObject, at: YamlPath, diagnose: Diagnose) 
     resolvable, "file" fields are allowed on the first (artifact) level
     only and have to be relative paths below the base directory,
     property value and marker expressions have to be syntactically
-    valid, "referenced" and "coverage" entries have to be reference
-    expressions, an "automaton" has to name existing child kinds and
-    properties, and the names of non-artifact objects have to be valid
-    patterns (as they are compiled into regular expressions)  */
+    valid, the mixins included by an object have to exist, "referenced"
+    and "coverage" entries have to be reference expressions, an
+    "automaton" has to name existing child kinds and properties, and the
+    names of non-artifact objects have to be valid patterns (as they are
+    compiled into regular expressions)  */
 const checkConstraints = (
-    config:    Schema,
+    config:    SchemaConfig,
+    mixins:    Map<string, SchemaMixin>,
     posOfPath: (path: YamlPath) => { file: string, line: number, column: number }
 ): Diagnostic[] => {
     const diagnostics = new Array<Diagnostic>()
@@ -242,19 +259,30 @@ const checkConstraints = (
         const { file, line, column } = posOfPath(path)
         diagnostics.push({ file, line, column, severity: "error", message })
     }
-    const check = (objects: SchemaObject[], path: YamlPath, depth: number) => {
+    const check = (entries: SchemaConfig, path: YamlPath, depth: number) => {
         /*  the sibling objects are resolved by kind and id on the first
             (artifact) level and by kind alone below it, so a sibling
-            colliding on this key stays unreachable dead configuration  */
+            colliding on this key stays unreachable dead configuration
+            (and so does a mixin colliding with a preceding one)  */
         const seen = new Set<string>()
-        for (const [ i, object ] of objects.entries()) {
+        for (const [ i, entry ] of entries.entries()) {
             const at    = [ ...path, i ]
-            const ident = identityOf(object, depth > 1 ? "children" : undefined)
+            const ident = identityOf(entry, depth > 1 ? "children" : undefined)
             if (seen.has(ident))
-                diagnose([ ...at, "kind" ],
+                diagnose([ ...at, isSchemaMixin(entry) ? "mixin" : "kind" ],
                     `object "${ident}" collides with a preceding sibling object (the later one is unreachable)`)
             else
                 seen.add(ident)
+
+            /*  a mixin carries nothing but its properties  */
+            if (isSchemaMixin(entry)) {
+                checkProperties((entry as SchemaMixin).props, at, diagnose)
+                continue
+            }
+            const object = entry as SchemaObject
+            for (const [ j, name ] of (object.mixins ?? []).entries())
+                if (!mixins.has(name))
+                    diagnose([ ...at, "mixins", j ], `unknown mixin "${name}"`)
             if (depth > 1 && object.file !== undefined)
                 diagnose([ ...at, "file" ],
                     `"file" field is only allowed on the first (artifact) level (found on level ${depth})`)
@@ -266,7 +294,7 @@ const checkConstraints = (
                 diagnose([ ...at, "file" ],
                     `"file" field "${object.file}" is not a relative path below the base directory`)
             checkProperties(object.props ?? [], at, diagnose)
-            checkAutomaton(object, at, diagnose)
+            checkAutomaton(object, mixins, at, diagnose)
             for (const field of [ "referenced", "coverage" ] as const)
                 for (const [ j, entry ] of (object[field] ?? []).entries()) {
                     /*  a reference coverage entry has to be a single
@@ -373,7 +401,7 @@ export const loadConfig = (files: string[]): { config?: Schema, diagnostics: Dia
 
     /*  semantically validate the merged result against the schema of the configuration  */
     const posOfPath = (path: YamlPath) => posOfMergedPath(docs, merged, path)
-    const result    = v.safeParse(Schema, merged)
+    const result    = v.safeParse(SchemaConfig, merged)
     if (!result.success) {
         for (const issue of result.issues) {
             /*  the path is rendered as it is in the positioned file  */
@@ -387,7 +415,24 @@ export const loadConfig = (files: string[]): { config?: Schema, diagnostics: Dia
     }
 
     /*  check the constraints beyond the structural schema  */
-    diagnostics.push(...checkConstraints(result.output, posOfPath))
+    const mixins = new Map(result.output.filter((entry) => isSchemaMixin(entry))
+        .map((entry) => [ (entry as SchemaMixin).mixin, entry as SchemaMixin ]))
+    diagnostics.push(...checkConstraints(result.output, mixins, posOfPath))
+    if (diagnostics.length > 0)
+        return { diagnostics }
 
-    return { config: diagnostics.length === 0 ? result.output : undefined, diagnostics }
+    /*  expand the mixins into the properties of the object kinds
+        including them and drop the mixins themselves, so every consumer
+        sees plain object kinds  */
+    const expand = (object: SchemaObject): SchemaObject => {
+        const { mixins: names, ...rest } = object
+        return {
+            ...rest,
+            ...(names !== undefined           ? { props: propsOf(object, mixins) }         : {}),
+            ...(object.children !== undefined ? { children: object.children.map(expand) } : {})
+        }
+    }
+    const config = result.output.filter((entry) => !isSchemaMixin(entry))
+        .map((entry) => expand(entry as SchemaObject))
+    return { config, diagnostics }
 }

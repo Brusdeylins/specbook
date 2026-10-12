@@ -64,7 +64,12 @@ whose comma-separated items are split at top-level commas only, i.e.
 outside double quotes, `[[xxx]]` references, and parentheses.
 
 ```ts
-type Schema = SchemaObject[]
+type Schema = (SchemaObject | SchemaMixin)[]
+type SchemaMixin = {
+    mixin:             string
+    desc?:             string
+    props:             SchemaProperty[]
+}
 type SchemaObject = {
     kind:              string
     name?:             string
@@ -73,6 +78,7 @@ type SchemaObject = {
     desc?:             string
     refs?:             string
     optional?:         boolean
+    mixins?:           string[]
     referenced?:       string[]
     coverage?:         string[]
     automaton?:        SchemaAutomaton
@@ -193,8 +199,28 @@ type SchemaGradiaConfig = Partial<{
 ```
 
 -   `Schema`:
-    whole schema: the object kinds the corpus consists of,
+    whole schema: the object kinds the corpus consists of, plus the
+    mixins they include,
     BECAUSE this configures SpecBook for a particular context
+
+-   `SchemaMixin`:
+    reusable, named group of properties on the first level of the
+    schema, which is no object kind itself and hence never matches an
+    object of the specification,
+    BECAUSE a cross-cutting concern (e.g. the evidence of a statement)
+    must be defined once, not copied into every object kind
+
+-   `SchemaMixin.mixin: string`:
+    name of the mixin, unique among the mixins of the schema,
+    BECAUSE the object kinds include the mixin by this name
+
+-   `SchemaMixin.desc?: string`:
+    prose description of the concern the mixin captures,
+    BECAUSE it guides the authors and instructs the AI
+
+-   `SchemaMixin.props: SchemaProperty[]`:
+    properties the mixin contributes to every object kind including it,
+    BECAUSE the properties carry the cross-cutting content
 
 -   `SchemaObject`:
     object kind: an artifact (level 1) or an object nested below it,
@@ -233,6 +259,14 @@ type SchemaGradiaConfig = Partial<{
     whether the kind may be absent below its parent or, for a level 1
     artifact, from its file (default: `false`),
     BECAUSE not every kind is mandatory below every parent object
+
+-   `SchemaObject.mixins?: string[]`:
+    names of the mixins whose properties the objects of this kind carry
+    in addition to their own `props` (appended in mixin order, where an
+    own property of the same name takes precedence and refines the one
+    of the mixin), where an unknown name is an error,
+    BECAUSE a property group applies to many kinds and a kind may need
+    to sharpen a single property of it
 
 -   `SchemaObject.referenced?: string[]`:
     wildcard references (e.g. `[[*]]` for any object, `[[UC.USE-CASE:*]]`
@@ -838,6 +872,34 @@ into the earlier ones, where the objects merge deeply and the elements
 of the lists are matched by their identity). If no particular schema is
 given, the standard schema configuration bundled with **SpecBook**
 applies.
+
+A mixin is a first-level entry carrying a `mixin` field instead of a
+`kind` field, and an object kind includes it by name:
+
+```yaml
+-   mixin: EVIDENCE
+    desc: The strength and the location of the evidence of a statement.
+    props:
+        -   name: EVIDENCE
+            value: enum(Observed,Derived,Inferred,Assumed)
+            optional: true
+        -   name: SOURCE
+            optional: true
+-   kind: ARCH
+    name: Functionality View
+    id: FV
+    file: 25-ARCH-FV-Functionality-View.md
+    children:
+        -   kind: COMPONENT
+            mixins:
+                -   EVIDENCE
+```
+
+The mixins are expanded only after the merge, so a later file can
+extend or refine a mixin of an earlier one (e.g. of the standard
+schema) and can let an object kind of an earlier file include a mixin
+by merging a `mixins` list into it (e.g. a file consisting of just the
+`kind`, `id`, and `children` of the artifact above).
 
 SpecBook SPEC Model
 -------------------

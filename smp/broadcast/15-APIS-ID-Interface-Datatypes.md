@@ -80,3 +80,22 @@ layers consistently.
 -   RESPAWN_DELAY; TYPE: `duration`; VALUE: `1000 ms`;
     The backoff delay before an unexpectedly dead worker process is respawned,
     BECAUSE a tight crash-loop would hammer the broker and the database.
+
+TYPE: Submission
+----------------
+
+-   INTERFACES: [[INTERFACE:live-topics]]
+-   ENCODING:   JSON, UTF-8
+
+A chat or question message submitted by an attendee on the live topics, BECAUSE the submission path needs the sender, the
+kind, and the text of a message before any of it is stored.
+
+### FIELD
+
+-   kind; TYPE: `enum(chat,question)`;
+    Whether the message is a chat message or a question,
+    BECAUSE the two kinds of messages follow different lifecycles.
+
+-   text; TYPE: `text`; CONSTRAINT: `1..500 characters`;
+    The text of the message as entered,
+    BECAUSE the text is what the sentiment triage scores and the audience reads.

@@ -192,8 +192,10 @@ animation engine which CSS alone does not provide.
 
 ### COMPONENT: Sentiment Analysis {{client-sentiment}}
 
--   PRODUCT:  natural + @nlpjs/core + multilang-sentiment
--   LICENSE:  MIT
+-   PRODUCT:    natural + @nlpjs/core + multilang-sentiment
+-   PROVENANCE: OpenSource
+-   UPSTREAM:   https://github.com/axa-group/nlp.js
+-   LICENSE:    MIT
 -   PHASE:    Run-Time
 -   COVERAGE: Presentation Model
 -   USED-BY:  [[COMPONENT:client-nlp]]
@@ -228,6 +230,9 @@ entry point and the horizontally scaled per-environment forwarding.
 ### COMPONENT: Message Broker {{message-broker}}
 
 -   PRODUCT:    Mosquitto
+-   PROVENANCE: OpenSource
+-   UPSTREAM:   https://github.com/eclipse-mosquitto/mosquitto
+-   VERSION:    2.0
 -   LICENSE:    EPL-2.0
 -   PHASE:      Run-Time
 -   COVERAGE:   Message Brokering

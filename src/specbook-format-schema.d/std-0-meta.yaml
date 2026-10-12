@@ -49,10 +49,13 @@
 #   | ARCH: Technology Stack (TS)            |     |      |      |     |     |      |     |  X  |
 #   | ARCH: Development Aspects (DA)         |     |      |      |     |     |      |     |  X  |
 #   | ARCH: Concurrency View (CO)            |     |      |      |     |     |      |     |  X  |
+#   | ARCH: Named Constants (NC)             |     |      |      |  X  |     |      |     |  X  |
+#   | ARCH: Processing View (PV)             |     |      |      |  X  |     |      |     |  X  |
 #   | ARCH: Deployment View (DV)             |     |      |      |     |     |      |     |  X  |
 #   | ARCH: Operations View (OV)             |     |      |      |     |     |      |     |  X  |
 #   | ARCH: Quality Perspectives (QP)        |     |      |      |     |     |      |     |  X  |
 #   | ARCH: Design Decisions (DD)            |     |      |      |     |     |      |     |  X  |
+#   | ARCH: Code Map (CM)                  |     |      |      |     |     |      |     |  X  |
 #   | -------------------------------------- | --- | ---- | ---- | --- | --- | ---- | --- | --- |
 #   | TEST: Test Cases (TC)                  |     |      |      |     |     |      |  X  |     |
 #
@@ -103,6 +106,17 @@
 #       and in AI-times (where dedicated teams no longer write
 #       those documents separately) the AI should see one coherent
 #       specification document, too.
+#
+#   -   The schema stays domain-neutral: the artifacts describing the
+#       internals of a solution (Named Constants, Processing View, Code
+#       Map) name no application domain, so the same kinds serve a
+#       compiler, a database, an embedded firmware, a web service, or a
+#       data pipeline, and serve the forward-engineering of a new
+#       solution as well as the reverse-engineering of an existing one.
+#
+#   -   A cross-cutting group of properties (e.g. the `EVIDENCE` of a
+#       statement) is defined once as a mixin and included by the object
+#       kinds needing it, instead of being copied into every object kind.
 #
 
 -   kind: META
@@ -159,5 +173,35 @@
         -   name: THEME-TONE
             desc: The theme color tone, optionally followed by the complement color tone (else derived).
             value: /^#[0-9a-fA-F]{6}(\s+#[0-9a-fA-F]{6})?$/
+            optional: true
+
+-   mixin: EVIDENCE
+    desc: >
+        The strength and the location of the evidence a descriptive statement about the solution
+        rests on, included by the object kinds which describe how the solution *is* built (and
+        hence can be confirmed or refuted by looking at it), but not by the prescriptive ones like
+        the requirements, whose validity stems from the stakeholders and not from evidence. Both
+        properties are omitted for a statement authored as plain design intent.
+    props:
+        -   name: EVIDENCE
+            desc: |
+                The strength of the evidence the object rests on, one of:
+                -   `Observed`: Seen directly in the solution or its artifacts (e.g. the
+                                source code, a binary, a configuration file, a captured
+                                message, a measurement).
+                -   `Derived`:  Deduced with certainty from observed facts (e.g. a buffer size
+                                computed from two observed constants).
+                -   `Inferred`: Concluded with plausibility, but not with certainty, from
+                                indirect hints (e.g. a purpose guessed from a call pattern).
+                -   `Assumed`:  Posited without evidence, to be confirmed later (e.g. a
+                                placeholder for a part not yet analyzed or decided).
+            value: enum(Observed,Derived,Inferred,Assumed)
+            optional: true
+        -   name: SOURCE
+            desc: >
+                The location of the evidence, as a comma-separated list of the places it was found
+                at, each as precise as possible (e.g. `src/queue.c:120-184`, `config/limits.yaml`,
+                `capture 2026-03-04 #17`, `benchmark report v2`), so that a reader can re-check
+                the statement instead of trusting it; omitted for an `Assumed` object.
             optional: true
 

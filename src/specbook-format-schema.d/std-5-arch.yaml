@@ -380,6 +380,8 @@
                 with the components it depends on, plus a 1-sentence rationale ("why") for the
                 component's existence and boundary.
             optional: true
+            mixins:
+                -   EVIDENCE
             format:
                 type: compact
                 maxTableColumns: 5
@@ -387,8 +389,9 @@
                 type: hub
                 center: self
                 nodes: "[[FV.COMPONENT:*]], [[FR.REQUIREMENT:*]], [[PATTERN:*]], [[INTERFACE:*]],
-                    [[DM.ENTITY:*]], [[UNIT:*]], [[NODE:*]], [[CONCERN:*]], [[TACTIC:*]],
-                    [[DECISION:*]], [[CODE-PATTERN:*]]"
+                    [[DM.ENTITY:*]], [[UNIT:*]], [[STRUCTURE:*]], [[ALGORITHM:*]], [[PIPELINE:*]],
+                    [[NODE:*]], [[CONCERN:*]], [[TACTIC:*]], [[DECISION:*]], [[CODE-PATTERN:*]],
+                    [[SYMBOL:*]]"
                 labeled: true
                 qualified: true
                 properties:
@@ -535,13 +538,20 @@
                         carrying trade-off behind the choice is a Design Decisions decision
                         referencing the component through `DECIDES`, and the functional components
                         depending on the product reference it through `USED-BY`.
+
+                        A third-party product is linked, not documented: its `PROVENANCE`,
+                        `UPSTREAM`, `VERSION`, and `LICENSE` identify it exactly, the description
+                        states only how the solution uses it, and the algorithms and stages it
+                        realizes reference it through their `TOOLS` instead of describing its
+                        internals.
                     format:
                         type: compact
                     diagram:
                         type: hub
                         center: self
-                        nodes: "[[TS.TIER:*.COMPONENT:*]], [[FV.COMPONENT:*]], [[CONCERN:*]],
-                            [[TACTIC:*]], [[DECISION:*]], [[CODE-PATTERN:*]]"
+                        nodes: "[[TS.TIER:*.COMPONENT:*]], [[FV.COMPONENT:*]], [[ALGORITHM:*]],
+                            [[STAGE:*]], [[CONCERN:*]], [[TACTIC:*]], [[DECISION:*]],
+                            [[CODE-PATTERN:*]]"
                         labeled: true
                         qualified: true
                         properties:
@@ -564,6 +574,32 @@
                                 property states *against what*, so it is expected whenever the
                                 rationale compares the product against others; omitted when there
                                 was no real alternative.
+                            optional: true
+                        -   name: PROVENANCE
+                            desc: |
+                                The origin of the product, one of:
+                                -   `OpenSource`: Developed in the open by third parties and used
+                                                  under an open-source license, referenced
+                                                  through `UPSTREAM`.
+                                -   `Commercial`: Licensed from a vendor.
+                                -   `InHouse`:    Developed by the organization behind the
+                                                  solution, but outside of it.
+                                Omitted when the origin is of no concern to the solution.
+                            value: enum(OpenSource,Commercial,InHouse)
+                            optional: true
+                        -   name: UPSTREAM
+                            desc: >
+                                The URL of the upstream source of the product (preferably its
+                                source code repository), present for every `OpenSource` product
+                                (which the schema cannot enforce itself), so that its internals
+                                are looked up there instead of being documented here.
+                            value: /https?:\/\/\S+/
+                            optional: true
+                        -   name: VERSION
+                            desc: >
+                                The version or version range of the product the solution uses
+                                (e.g. `3.4.1`, `>= 2.0 < 3`), as the behavior relied upon may
+                                change between versions; omitted when any current version fits.
                             optional: true
                         -   name: LICENSE
                             desc: >
@@ -942,12 +978,17 @@
                 but the coordination mechanism stated in `COORDINATION`, its contract an Interface
                 Model interface (e.g. of kind `MQTT` or `WebSocket`), and the platform element
                 hosting a managed broker a Deployment View `Managed` node -- only the executing
-                structure itself belongs to the Concurrency View.
+                structure itself belongs to the Concurrency View. The in-memory structures shared
+                between units are Processing View structures, which reference the units accessing
+                them through `ACCESSED-BY` and state their `SYNCHRONIZATION`.
             optional: true
+            mixins:
+                -   EVIDENCE
             diagram:
                 type: hub
                 center: self
-                nodes: "[[UNIT:*]], [[FV.COMPONENT:*]], [[NODE:*]], [[TACTIC:*]], [[DECISION:*]]"
+                nodes: "[[UNIT:*]], [[FV.COMPONENT:*]], [[STRUCTURE:*]], [[STAGE:*]], [[NODE:*]],
+                    [[TACTIC:*]], [[DECISION:*]], [[SYMBOL:*]]"
                 labeled: true
                 qualified: true
                 properties:
@@ -1001,9 +1042,462 @@
                         queue`, `mutex`, `message passing`, `optimistic locking`).
 
 -   kind: ARCH
+    name: Named Constants
+    id: NC
+    file: 29-ARCH-NC-Named-Constants.md
+    desc: >
+        The named values the solution is built around and tuned by -- limits, defaults, sizes,
+        durations, budgets, tolerances, and identifiers (e.g. a maximum message size, a retry
+        interval, a buffer capacity, a well-known port, a magic number) -- each stated once with
+        its value, unit, and effect, so that the structures, algorithms, stages, tactics,
+        decisions, code, and tests reference one authoritative value instead of repeating a
+        literal. The artifact is absent when the solution has no such values worth stating.
+
+        The constants form one central catalog instead of being scattered as child objects over
+        the artifacts using them, as a value is usually shared by several of them (e.g. a buffer
+        capacity sized by the structure, consumed by the stage, and verified by the test case),
+        and as an unreferenced constant is detected as dead weight only in one place. A constant
+        is internal to the solution: a value agreed upon with the consumers of an interface is a
+        `CONSTANT` of an Interface Datatypes type, and a quality bound the solution has to meet
+        is the `METRIC` of a Non-Functional Requirement, which a constant may realize and then
+        references through `DRIVEN-BY`.
+    optional: true
+    refs: >
+        -   McConnell: Code Complete, 2nd ed.: Named Constants (2004),
+            https://www.microsoftpressstore.com/store/code-complete-9780735619678
+        -   Fowler: Refactoring, 2nd ed.: Replace Magic Literal (2018),
+            https://refactoring.com/catalog/replaceMagicLiteral.html
+    diagram:
+        type: grid
+        nodes: "[[NC.CONSTANT:*]]"
+        properties:
+            -   CLASS
+            -   VALUE
+        config:
+            grid-columns-max: 4
+    children:
+        -   kind: CONSTANT
+            desc: >
+                A single named value, named with its identifier in the code where one exists
+                (e.g. `MAX_MESSAGE_SIZE`, `retryInterval`) or else with a short (2-5 word)
+                summary (e.g. `Reconnect Back-Off`), and described in a concise (1-2 sentence)
+                paragraph by what the value governs, plus a 1-sentence rationale ("why") for the
+                value itself (e.g. the measurement, standard, or trade-off it stems from).
+
+                A constant is referenced by the objects using it (a structure through its
+                `CAPACITY`, an algorithm or stage through its `PARAMETERS` or `BUDGET`, a tactic
+                or decision through its `AFFECTS`, a symbol through its `IMPLEMENTS`, a test case
+                through its `VERIFIES`) and references nothing of them itself, so that the
+                references keep pointing backward and a constant used by no modeled element is
+                reported.
+            optional: true
+            referenced:
+                -   "[[*]]"
+            mixins:
+                -   EVIDENCE
+            format:
+                type: compact
+            diagram:
+                type: hub
+                center: self
+                nodes: "[[NC.CONSTANT:*]], [[NR.REQUIREMENT:*]], [[PREMISE:*]], [[STRUCTURE:*]],
+                    [[ALGORITHM:*]], [[STAGE:*]], [[TACTIC:*]], [[DECISION:*]], [[SYMBOL:*]],
+                    [[TEST-CASE:*]]"
+                labeled: true
+                qualified: true
+                config:
+                    size-node-width-max: 440
+            props:
+                -   name: CLASS
+                    desc: |
+                        The class of the value, one of:
+                        -   `Limit`:      A bound the solution enforces (e.g. a maximum number of
+                                          connections, a minimum free disk space).
+                        -   `Default`:    The initial value of a setting which may be changed
+                                          (e.g. a default page size).
+                        -   `Size`:       A dimension of a structure or a unit of work (e.g. a
+                                          buffer capacity, a block size, a batch size).
+                        -   `Duration`:   A span of time (e.g. a timeout, a polling interval, a
+                                          retry delay).
+                        -   `Budget`:     An allowance of a resource an operation may consume
+                                          (e.g. a time budget per cycle, a memory budget).
+                        -   `Tolerance`:  An admissible deviation (e.g. an epsilon, a clock drift,
+                                          a jitter).
+                        -   `Identifier`: A fixed code, key, or address (e.g. a port, a magic
+                                          number, a well-known name).
+                        -   `Other`:      Any other value, explained in the description.
+                    value: enum(Limit,Default,Size,Duration,Budget,Tolerance,Identifier,Other)
+                -   name: VALUE
+                    desc: >
+                        The literal value of the constant (e.g. `65536`, `0x1F8B`, `250`), or the
+                        expression it is computed from in the code (e.g. `2 * BLOCK_SIZE`), the
+                        unit stated separately.
+                    value: /.+/
+                -   name: UNIT
+                    desc: >
+                        The unit of the value (e.g. `bytes`, `ms`, `items`, `%`, `samples`);
+                        omitted for a dimensionless value.
+                    optional: true
+                -   name: EFFECT
+                    desc: >
+                        What changes when the value is raised or lowered (e.g. `higher: more
+                        memory, fewer stalls -- lower: less latency, more drops`), so that a tuning
+                        decision can be made without re-analyzing the solution; omitted for an
+                        `Identifier`, which is not tunable.
+                    optional: true
+                -   name: DRIVEN-BY
+                    desc: >
+                        Comma-separated references to the NON-FUNCTIONAL-REQUIREMENTS or
+                        SOLUTION-PREMISES objects the value realizes (e.g. the latency requirement
+                        a time budget is derived from, the hardware premise a buffer size is fitted
+                        to); omitted for a value grounded in its rationale alone.
+                    value: list([[NR.*]], [[PREMISE:*]])
+                    optional: true
+
+-   kind: ARCH
+    name: Processing View
+    id: PV
+    file: 30-ARCH-PV-Processing-View.md
+    desc: >
+        The internal processing of the solution below its functional components: the in-memory
+        data structures it keeps, the algorithms and compute kernels it runs, and the pipelines
+        through whose ordered stages its data flows, each tied to the components owning it, the
+        concurrency units executing it, the types it consumes and produces, and the named
+        constants governing it. The artifact is absent when the solution has no internal
+        processing beyond the responsibilities of its components worth describing.
+
+        The view follows the Functionality View, the Concurrency View, and the Named Constants,
+        as its elements are finer-grained than the components and units and reference them
+        together with the constants and the Interface Datatypes types, while the Quality
+        Perspectives, Design Decisions, Code Patterns, Code Map, and Test Cases following it
+        reference its elements in turn. Only the realization of the solution itself is described:
+        a structure, algorithm, or stage which is merely a third-party product references its
+        Technology Stack component through `TOOLS` instead of documenting its internals.
+    optional: true
+    refs: >
+        -   Rozanski/Woods: Software Systems Architecture, 2nd ed.: The Information Viewpoint (2011),
+            https://www.viewpoints-and-perspectives.info/home/viewpoints/information/
+        -   Buschmann et al.: Pattern-Oriented Software Architecture, Vol. 1: Pipes and Filters (1996),
+            https://www.wiley.com/en-us/Pattern+Oriented+Software+Architecture%2C+Volume+1%2C+A+System+of+Patterns-p-9780471958697
+        -   Cormen/Leiserson/Rivest/Stein: Introduction to Algorithms, 4th ed. (2022),
+            https://mitpress.mit.edu/9780262046305/introduction-to-algorithms/
+    diagram:
+        type: graph
+        nodes: "[[STRUCTURE:*]], [[ALGORITHM:*]], [[PIPELINE:*]]"
+        deep: true
+        labeled: true
+        qualified: true
+        nest:
+            kind: true
+        config:
+            size-node-width-max: 440
+    children:
+        -   kind: STRUCTURE
+            desc: >
+                A single in-memory data structure, named with a short (2-5 word) summary (e.g.
+                `Request Queue`, `Session Table`, `Block Cache`) and described in a concise (1-3
+                sentence) paragraph by what the structure holds and how it is used, plus a
+                1-sentence rationale ("why") for its shape.
+
+                A structure differs from a named constant by having a shape, an owner, a lifetime,
+                and a synchronization, and from a Data Model entity by living in memory only for
+                the processing (a persisted entity is a Data Model entity, its in-memory cache or
+                index is a structure). It belongs neither to the Functionality View nor to the
+                Concurrency View, as it references both its owning component and the concurrency
+                units accessing it.
+            optional: true
+            mixins:
+                -   EVIDENCE
+            format:
+                type: compact
+            diagram:
+                type: hub
+                center: self
+                nodes: "[[STRUCTURE:*]], [[FV.COMPONENT:*]], [[UNIT:*]], [[NC.CONSTANT:*]],
+                    [[TYPE:*]], [[DM.ENTITY:*]], [[ALGORITHM:*]], [[STAGE:*]], [[TACTIC:*]],
+                    [[DECISION:*]], [[CODE-PATTERN:*]], [[SYMBOL:*]], [[TEST-CASE:*]]"
+                labeled: true
+                qualified: true
+                properties:
+                    -   KIND
+                config:
+                    size-node-width-max:    440
+                    size-node-height-scale: 1.75
+                    hub-node-count-max:     3
+            props:
+                -   name: KIND
+                    desc: |
+                        The kind of the structure, one of:
+                        -   `Buffer`: A contiguous region holding data in transit (e.g. a ring
+                                      buffer, a scratch area).
+                        -   `Queue`:  An ordered hand-over of items between producers and
+                                      consumers.
+                        -   `Pool`:   A set of reusable, preallocated objects or resources.
+                        -   `Cache`:  A copy of data kept for faster repeated access.
+                        -   `Table`:  A keyed lookup structure (e.g. a map, an index, a
+                                      registry).
+                        -   `State`:  The working state of a process or session (e.g. a context
+                                      object, a state vector).
+                        -   `Other`:  Any other structure, explained in the description.
+                    value: enum(Buffer,Queue,Pool,Cache,Table,State,Other)
+                -   name: LAYOUT
+                    desc: >
+                        The shape of the structure: the element type (referencing an
+                        INTERFACE-DATATYPES type where modeled), the arrangement of the elements
+                        (e.g. `array of 16-byte slots`, `hash map keyed by session id`), and,
+                        where it matters, the alignment and padding.
+                    optional: true
+                -   name: CAPACITY
+                    desc: >
+                        Reference to the NAMED-CONSTANTS object bounding the number or size of the
+                        elements, or `unbounded` for a structure growing without a bound (which
+                        the rationale then has to justify).
+                    value: list([[NC.CONSTANT:*]], /unbounded/)
+                    optional: true
+                -   name: OWNER
+                    desc: >
+                        Reference to the FUNCTIONALITY-VIEW component owning the structure, i.e.
+                        creating, releasing, and alone mutating it unless `SYNCHRONIZATION` states
+                        otherwise.
+                    value: "[[FV.COMPONENT:*]]"
+                    optional: true
+                -   name: LIFETIME
+                    desc: >
+                        When the structure is created and released (e.g. `process lifetime`, `per
+                        session`, `per request`, `until evicted`).
+                    optional: true
+                -   name: ACCESSED-BY
+                    desc: >
+                        Comma-separated references to the CONCURRENCY-VIEW units reading or
+                        writing the structure, which the structure references instead of the
+                        units referencing it, as the units precede it; omitted for a structure
+                        accessed by a single, obvious unit only.
+                    value: list([[UNIT:*]])
+                    optional: true
+                -   name: SYNCHRONIZATION
+                    desc: >
+                        How concurrent access to the structure is made safe (e.g. `single writer,
+                        lock-free readers`, `mutex per bucket`, `copy on write`, `confined to one
+                        thread`), complementing the `COORDINATION` of the units accessing it.
+                    optional: true
+        -   kind: ALGORITHM
+            desc: >
+                A single algorithm or compute kernel of the solution, named with a short (2-5 word)
+                summary of the computation (e.g. `Token Bucket Limiter`, `Delta Encoding`,
+                `Matrix Transpose Kernel`) and described in a concise (1-3 sentence) paragraph by
+                what it computes and how, plus a 1-sentence rationale ("why") for choosing this
+                method.
+
+                An algorithm and a compute kernel are one kind, told apart by their `TARGET`, as
+                both are a computation with inputs, outputs, invariants, and numerics, differing
+                only in the hardware they are fitted to. The listing of the essential part of the
+                computation follows the description and its rationale as its elaboration, either
+                a fenced code block or an embedded excerpt of the source file, exactly like the
+                listing of a Code Patterns pattern. An algorithm differs from a Code Patterns
+                pattern by being one particular computation instead of a recurring code shape,
+                and from a Functionality View component by having no responsibility of its own
+                beyond the computation; a stage of a pipeline references the algorithms it runs
+                through `ALGORITHMS`, so one algorithm serves several stages.
+            optional: true
+            mixins:
+                -   EVIDENCE
+            format:
+                type: complex
+            diagram:
+                type: hub
+                center: self
+                nodes: "[[ALGORITHM:*]], [[FV.COMPONENT:*]], [[NC.CONSTANT:*]], [[STRUCTURE:*]],
+                    [[TYPE:*]], [[TS.TIER:*.COMPONENT:*]], [[STAGE:*]], [[TACTIC:*]],
+                    [[DECISION:*]], [[CODE-PATTERN:*]], [[SYMBOL:*]], [[TEST-CASE:*]]"
+                labeled: true
+                qualified: true
+                properties:
+                    -   TARGET
+                config:
+                    size-node-width-max: 440
+            props:
+                -   name: TARGET
+                    desc: |
+                        The hardware the computation is fitted to, one of:
+                        -   `CPU`:         Scalar code on general-purpose processor cores.
+                        -   `SIMD`:        Vectorized code on the vector units of the processor.
+                        -   `GPU`:         Kernels on a graphics processor.
+                        -   `Accelerator`: Code on a dedicated unit (e.g. a DSP, an FPGA, an NPU).
+                        -   `Distributed`: Work spread over several machines.
+                    value: enum(CPU,SIMD,GPU,Accelerator,Distributed)
+                -   name: OWNER
+                    desc: >
+                        Reference to the FUNCTIONALITY-VIEW component the computation belongs to;
+                        omitted for a computation shared by several components alike.
+                    value: "[[FV.COMPONENT:*]]"
+                    optional: true
+                -   name: INPUT
+                    desc: >
+                        What the computation consumes, referencing the INTERFACE-DATATYPES types
+                        or the STRUCTURE objects where modeled (e.g. `[[TYPE:Record]] batch of up
+                        to [[NC.CONSTANT:BATCH_SIZE]] items`).
+                    optional: true
+                -   name: OUTPUT
+                    desc: >
+                        What the computation produces, in the same terms as `INPUT`.
+                    optional: true
+                -   name: INVARIANTS
+                    desc: >
+                        The conditions holding before, during, and after the computation (e.g.
+                        `output sorted by key`, `sum of weights stays 1`), which the test cases
+                        verify.
+                    optional: true
+                -   name: COMPLEXITY
+                    desc: >
+                        The time and space complexity in the size of the input (e.g. `O(n log n)
+                        time, O(1) extra space`).
+                    optional: true
+                -   name: NUMERICS
+                    desc: >
+                        The numeric behavior: precision, rounding, value range, overflow, and
+                        determinism (e.g. `32-bit float, round to nearest, saturating at 1.0,
+                        not bit-exact across targets`); omitted for a non-numeric computation.
+                    optional: true
+                -   name: PARAMETERS
+                    desc: >
+                        Comma-separated references to the NAMED-CONSTANTS objects tuning the
+                        computation (e.g. a window size, a threshold, an iteration limit).
+                    value: list([[NC.CONSTANT:*]])
+                    optional: true
+                -   name: BUDGET
+                    desc: >
+                        Reference to the NAMED-CONSTANTS object (usually of `CLASS` `Budget`)
+                        bounding the resource one execution of the computation may consume (e.g.
+                        the time per cycle); omitted for a computation without such a bound.
+                    value: "[[NC.CONSTANT:*]]"
+                    optional: true
+                -   name: DATA-LAYOUT
+                    desc: >
+                        How the data is arranged in memory for the computation (e.g. `structure
+                        of arrays, 32-byte aligned`, `tiles of 16x16 elements`), referencing the
+                        STRUCTURE objects where modeled; omitted when the layout is of no concern.
+                    optional: true
+                -   name: PARALLELISM
+                    desc: >
+                        How the computation is split for parallel execution (e.g. `one work item
+                        per element`, `rows partitioned over the worker pool`); omitted for a
+                        sequential computation.
+                    optional: true
+                -   name: TOOLS
+                    desc: >
+                        Comma-separated references to the TECHNOLOGY-STACK components providing
+                        the computation or its building blocks (e.g. a math library), whose
+                        internals are then not documented here; omitted for a computation coded
+                        by the solution alone.
+                    value: list([[TS.TIER:*.COMPONENT:*]])
+                    optional: true
+        -   kind: PIPELINE
+            desc: >
+                A single processing pipeline, named with a short (2-5 word) summary of the data
+                path (e.g. `Ingest Path`, `Query Execution Path`, `Firmware Update Path`) and
+                described in a concise (1-3 sentence) paragraph by the data it carries, where it
+                begins and ends, and how its stages are scheduled, plus a 1-sentence rationale
+                ("why") for the cut of the pipeline. Its `STAGE` objects are listed in processing
+                order, so the diagram of the pipeline lines them up in that order.
+            optional: true
+            mixins:
+                -   EVIDENCE
+            format:
+                type: complex
+            diagram:
+                type: graph
+                ordered: true
+                labeled: true
+                nest:
+                    parent: true
+                config:
+                    size-node-width-max: 300
+                    graph-columns-max:   4
+            props:
+                -   name: DATA
+                    desc: >
+                        The data carried by the pipeline, in the terms of the domain or by
+                        reference to the INTERFACE-DATATYPES types (e.g. `log records`, `sensor
+                        samples`, `[[TYPE:Query]] plans`).
+                    optional: true
+                -   name: COMPONENTS
+                    desc: >
+                        Comma-separated references to the FUNCTIONALITY-VIEW components executing
+                        the pipeline.
+                    value: list([[FV.COMPONENT:*]])
+                    optional: true
+                -   name: REALIZES
+                    desc: >
+                        Comma-separated references to the FUNCTIONAL-REQUIREMENTS objects whose
+                        capability the pipeline delivers.
+                    value: list([[FR.*]])
+                    optional: true
+            children:
+                -   kind: STAGE
+                    desc: >
+                        A single stage of the pipeline, named with a short (2-5 word) verb phrase
+                        (e.g. `Validate Records`, `Merge Partial Results`) and described by what
+                        the stage does to the data and the rule it applies, plus a 1-sentence
+                        rationale ("why"). A stage which is merely a third-party product references
+                        it through `TOOLS` and is otherwise not elaborated.
+                    optional: true
+                    mixins:
+                        -   EVIDENCE
+                    format:
+                        type: compact
+                    props:
+                        -   name: FED-BY
+                            desc: >
+                                Comma-separated references to the stages of the same pipeline
+                                whose output this stage consumes, forming the edges of the
+                                pipeline diagram; omitted for an entry stage, which is fed from
+                                outside the pipeline as its `INPUT` states.
+                            value: list([[STAGE:*]])
+                            optional: true
+                            local: true
+                            acyclic: true
+                        -   name: INPUT
+                            desc: >
+                                What the stage consumes, referencing the INTERFACE-DATATYPES
+                                types or the STRUCTURE objects where modeled, with the exact
+                                format as far as it matters (e.g. `[[TYPE:Record]] in batches`).
+                            optional: true
+                        -   name: OUTPUT
+                            desc: >
+                                What the stage produces, in the same terms as `INPUT`.
+                            optional: true
+                        -   name: ALGORITHMS
+                            desc: >
+                                Comma-separated references to the ALGORITHM objects the stage
+                                runs.
+                            value: list([[ALGORITHM:*]])
+                            optional: true
+                        -   name: PARAMETERS
+                            desc: >
+                                Comma-separated references to the NAMED-CONSTANTS objects
+                                governing the stage beyond those of its algorithms (e.g. a
+                                queue depth, a flush interval).
+                            value: list([[NC.CONSTANT:*]])
+                            optional: true
+                        -   name: EXECUTION
+                            desc: >
+                                Comma-separated references to the CONCURRENCY-VIEW units
+                                executing the stage, while its timing and buffering are stated
+                                in the description.
+                            value: list([[UNIT:*]])
+                            optional: true
+                        -   name: TOOLS
+                            desc: >
+                                Comma-separated references to the TECHNOLOGY-STACK components
+                                the stage is implemented by, whose internals are then not
+                                documented here; omitted for a stage coded by the solution alone.
+                            value: list([[TS.TIER:*.COMPONENT:*]])
+                            optional: true
+
+-   kind: ARCH
     name: Deployment View
     id: DV
-    file: 29-ARCH-DV-Deployment-View.md
+    file: 31-ARCH-DV-Deployment-View.md
     desc: >
         The environment into which the solution is deployed, partitioning it into tiers and mapping
         software elements to the runtime platform, hardware, and network topology.
@@ -1258,7 +1752,7 @@
 -   kind: ARCH
     name: Operations View
     id: OV
-    file: 30-ARCH-OV-Operations-View.md
+    file: 32-ARCH-OV-Operations-View.md
     desc: >
         The way the solution is operated, administered, and supported in production, defining the
         standing procedures by which the operating organization installs, configures, migrates,
@@ -1373,7 +1867,7 @@
 -   kind: ARCH
     name: Quality Perspectives
     id: QP
-    file: 31-ARCH-QP-Quality-Perspectives.md
+    file: 33-ARCH-QP-Quality-Perspectives.md
     desc: >
         How the Non-Functional Requirements (NR) are addressed by the architecture, through the
         tactics built into the solution across the views.
@@ -1428,7 +1922,8 @@
                 type: hub
                 center: self
                 nodes: "[[TACTIC:*]], [[NR.REQUIREMENT:*]], [[MAXIM:*]], [[AT.PRINCIPLE:*]],
-                    [[PATTERN:*]], [[FV.COMPONENT:*]], [[UNIT:*]], [[ASPECT:*]], [[NODE:*]],
+                    [[PATTERN:*]], [[FV.COMPONENT:*]], [[UNIT:*]], [[NC.CONSTANT:*]],
+                    [[STRUCTURE:*]], [[ALGORITHM:*]], [[PIPELINE:*]], [[ASPECT:*]], [[NODE:*]],
                     [[DM.ENTITY:*]], [[CONCERN:*]], [[DECISION:*]], [[TS.TIER:*.COMPONENT:*]],
                     [[CODE-PATTERN:*]], [[TEST-CASE:*]]"
                 labeled: true
@@ -1492,13 +1987,14 @@
                 -   name: AFFECTS
                     desc: >
                         Comma-separated references to the FUNCTIONALITY-VIEW, CONCURRENCY-VIEW,
-                        DEVELOPMENT-ASPECTS, DEPLOYMENT-VIEW, DATA-MODEL, AUTHORIZATION-MODEL, or
-                        INTERFACE-MODEL objects the tactic shapes (e.g. the components replicated,
-                        the aspects governing modifiability, the entities anonymized, the roles
-                        and interfaces secured).
-                    value: list([[FV.COMPONENT:*]], [[UNIT:*]], [[ASPECT:*]], [[DV.TIER:*]],
-                        [[AREA:*]], [[NODE:*]], [[NETWORK:*]], [[DM.ENTITY:*]], [[ROLE:*]],
-                        [[INTERFACE:*]])
+                        NAMED-CONSTANTS, PROCESSING-VIEW, DEVELOPMENT-ASPECTS, DEPLOYMENT-VIEW,
+                        DATA-MODEL, AUTHORIZATION-MODEL, or INTERFACE-MODEL objects the tactic
+                        shapes (e.g. the components replicated, the timeout bounding a wait, the
+                        cache and the algorithm speeding up a path, the aspects governing
+                        modifiability, the entities anonymized, the roles and interfaces secured).
+                    value: list([[FV.COMPONENT:*]], [[UNIT:*]], [[NC.CONSTANT:*]], [[STRUCTURE:*]],
+                        [[ALGORITHM:*]], [[PIPELINE:*]], [[ASPECT:*]], [[DV.TIER:*]], [[AREA:*]],
+                        [[NODE:*]], [[NETWORK:*]], [[DM.ENTITY:*]], [[ROLE:*]], [[INTERFACE:*]])
                     optional: true
                 -   name: OPERATED-BY
                     desc: >
@@ -1518,7 +2014,7 @@
 -   kind: ARCH
     name: Design Decisions
     id: DD
-    file: 32-ARCH-DD-Design-Decisions.md
+    file: 34-ARCH-DD-Design-Decisions.md
     desc: >
         The major decisions related to the solution design, each recording the forces at play, the
         chosen response, and the reasoning that justifies it. The artifact is the last
@@ -1604,6 +2100,8 @@
                 not asserted - if you delete the rationale and the decision suddenly looks
                 arbitrary, the rationale was doing its job.
             optional: true
+            mixins:
+                -   EVIDENCE
             format:
                 type: complex
             diagram:
@@ -1613,7 +2111,8 @@
                     [[AT.PRINCIPLE:*]], [[PATTERN:*]], [[DM.ENTITY:*]], [[LIFECYCLE:*]], [[ROLE:*]],
                     [[INTERFACE:*]], [[TYPE:*]], [[ENDPOINT:*]], [[IC.PRINCIPLE:*]],
                     [[CONVENTION:*]], [[DIALOG-PATTERN:*]], [[STORYBOARD:*]], [[ELEMENT:*]],
-                    [[CV.ENTITY:*]], [[FV.COMPONENT:*]], [[UNIT:*]], [[ASPECT:*]], [[DV.TIER:*]],
+                    [[CV.ENTITY:*]], [[FV.COMPONENT:*]], [[UNIT:*]], [[NC.CONSTANT:*]],
+                    [[STRUCTURE:*]], [[ALGORITHM:*]], [[PIPELINE:*]], [[ASPECT:*]], [[DV.TIER:*]],
                     [[AREA:*]], [[NODE:*]], [[NETWORK:*]], [[TACTIC:*]],
                     [[TS.TIER:*.COMPONENT:*]], [[CODE-PATTERN:*]]"
                 labeled: true
@@ -1669,11 +2168,13 @@
                         elements of the architecture views (e.g. the entity owned by a single
                         context, the interface styled REST instead of GraphQL, the dialog pattern
                         chosen over a native one, the components split, the external system
-                        integrated); omitted for a decision shaping no modeled element.
+                        integrated, the algorithm chosen over a simpler one, the value fixed for a
+                        constant); omitted for a decision shaping no modeled element.
                     value: list([[DM.ENTITY:*]], [[LIFECYCLE:*]], [[ROLE:*]], [[INTERFACE:*]],
                         [[TYPE:*]], [[ENDPOINT:*]], [[IC.PRINCIPLE:*]], [[CONVENTION:*]],
                         [[DIALOG-PATTERN:*]], [[STORYBOARD:*]], [[ELEMENT:*]], [[CV.ENTITY:*]],
-                        [[FV.COMPONENT:*]], [[UNIT:*]], [[ASPECT:*]], [[DV.TIER:*]], [[AREA:*]],
+                        [[FV.COMPONENT:*]], [[UNIT:*]], [[NC.CONSTANT:*]], [[STRUCTURE:*]],
+                        [[ALGORITHM:*]], [[PIPELINE:*]], [[ASPECT:*]], [[DV.TIER:*]], [[AREA:*]],
                         [[NODE:*]], [[NETWORK:*]])
                     optional: true
                 -   name: DECIDES
@@ -1773,7 +2274,7 @@
 -   kind: ARCH
     name: Code Patterns
     id: CP
-    file: 33-ARCH-CP-Code-Patterns.md
+    file: 35-ARCH-CP-Code-Patterns.md
     desc: >
         The implementation patterns the source code of the solution follows, each prescribing how
         one recurring concern (e.g. authorization enforcement, entity persistence, error
@@ -1829,9 +2330,10 @@
             diagram:
                 type: hub
                 center: self
-                nodes: "[[CODE-PATTERN:*]], [[FV.COMPONENT:*]], [[UNIT:*]], [[DM.ENTITY:*]],
-                    [[ROLE:*]], [[INTERFACE:*]], [[ENDPOINT:*]], [[TS.TIER:*.COMPONENT:*]],
-                    [[PATTERN:*]], [[TACTIC:*]], [[DECISION:*]]"
+                nodes: "[[CODE-PATTERN:*]], [[FV.COMPONENT:*]], [[UNIT:*]], [[STRUCTURE:*]],
+                    [[ALGORITHM:*]], [[STAGE:*]], [[DM.ENTITY:*]], [[ROLE:*]], [[INTERFACE:*]],
+                    [[ENDPOINT:*]], [[TS.TIER:*.COMPONENT:*]], [[PATTERN:*]], [[TACTIC:*]],
+                    [[DECISION:*]]"
                 labeled: true
                 qualified: true
                 config:
@@ -1840,12 +2342,13 @@
                 -   name: APPLIES-TO
                     desc: >
                         Comma-separated references to the FUNCTIONALITY-VIEW, CONCURRENCY-VIEW,
-                        DATA-MODEL, AUTHORIZATION-MODEL, INTERFACE-MODEL, or INTERFACE-ENDPOINTS
-                        objects whose code follows the pattern (e.g. the components persisting
-                        their entities this way, the roles and endpoints guarded by the check);
+                        PROCESSING-VIEW, DATA-MODEL, AUTHORIZATION-MODEL, INTERFACE-MODEL, or
+                        INTERFACE-ENDPOINTS objects whose code follows the pattern (e.g. the
+                        components persisting their entities this way, the structures guarded by
+                        the same locking shape, the roles and endpoints guarded by the check);
                         omitted for a pattern applied throughout the code base.
-                    value: list([[FV.COMPONENT:*]], [[UNIT:*]], [[DM.ENTITY:*]], [[ROLE:*]],
-                        [[INTERFACE:*]], [[ENDPOINT:*]])
+                    value: list([[FV.COMPONENT:*]], [[UNIT:*]], [[STRUCTURE:*]], [[ALGORITHM:*]],
+                        [[STAGE:*]], [[DM.ENTITY:*]], [[ROLE:*]], [[INTERFACE:*]], [[ENDPOINT:*]])
                     optional: true
                 -   name: REALIZES
                     desc: >
@@ -1885,4 +2388,107 @@
                         developer would otherwise reach for (e.g. `SQL strings assembled in the
                         request handlers`, `role checks in the client alone`); omitted when the
                         rule has no tempting alternative.
+                    optional: true
+
+-   kind: ARCH
+    name: Code Map
+    id: CM
+    file: 36-ARCH-CM-Code-Map.md
+    desc: >
+        The mapping of the specification onto the source code or the shipped artifacts of the
+        solution, each symbol of the code (a module, file, type, function, field, or resource)
+        naming its location and the specification objects it implements, so that the
+        specification and the code can be traced into each other in both directions. The artifact
+        serves the forward-engineering (where has the specified element been implemented, what is
+        still missing) as well as the reverse-engineering (which specified element does an
+        obfuscated or cryptically named symbol realize), and is absent when the traceability is
+        kept outside the specification.
+
+        The artifact follows the Code Patterns, as a symbol may implement any object preceding it,
+        and reports the share of the components, types, endpoints, constants, structures,
+        algorithms, and stages implemented by at least one symbol. A symbol which is part of a
+        third-party product is not mapped: the product is a Technology Stack component.
+    optional: true
+    coverage:
+        -   "[[FV.COMPONENT:*]]"
+        -   "[[TYPE:*]]"
+        -   "[[ENDPOINT:*]]"
+        -   "[[NC.CONSTANT:*]]"
+        -   "[[STRUCTURE:*]]"
+        -   "[[ALGORITHM:*]]"
+        -   "[[STAGE:*]]"
+    refs: >
+        -   Clements et al.: Documenting Software Architectures: Views and Beyond, 2nd ed.: Implementation Style (2010),
+            https://www.informit.com/store/documenting-software-architectures-views-and-beyond-9780321552686
+        -   Gotel/Finkelstein: An Analysis of the Requirements Traceability Problem (1994),
+            https://ieeexplore.ieee.org/document/292398
+    diagram:
+        type: grid
+        nodes: "[[SYMBOL:*]]"
+        nest:
+            properties:
+                -   PART-OF
+            layout: grid
+        properties:
+            -   CLASS
+        config:
+            size-node-width-max: 440
+            grid-columns-max: 4
+    children:
+        -   kind: SYMBOL
+            desc: >
+                A single symbol of the code, named with the name it is known by in the
+                specification (usually its identifier in the code, or the meaningful name
+                recovered for an obfuscated one) and described by a 1-sentence description of
+                its role ("what") plus a 1-sentence rationale ("why") for the mapping. A symbol
+                is mapped only where the trace is worth keeping (e.g. the entry points of the
+                components, the implementations of the algorithms and structures), not for every
+                symbol of the code.
+            optional: true
+            mixins:
+                -   EVIDENCE
+            format:
+                type: concise
+                maxTableColumns: 5
+            props:
+                -   name: CLASS
+                    desc: |
+                        The class of the symbol, one of:
+                        -   `Module`:   A package, namespace, library, or executable.
+                        -   `File`:     A source or artifact file.
+                        -   `Type`:     A class, structure, interface, or enumeration.
+                        -   `Function`: A function, method, or procedure.
+                        -   `Field`:    A variable, member, constant, or property.
+                        -   `Resource`: An embedded or shipped resource (e.g. a table, a shader, a
+                                        configuration file).
+                    value: enum(Module,File,Type,Function,Field,Resource)
+                -   name: IDENTIFIER
+                    desc: >
+                        The exact identifier of the symbol in the code, where it differs from
+                        the name (e.g. an obfuscated, mangled, or fully qualified identifier).
+                    optional: true
+                -   name: ALIAS
+                    desc: >
+                        Comma-separated further names of the symbol (e.g. its original name
+                        before an obfuscation or a rename, its exported or display name).
+                    optional: true
+                -   name: LOCATION
+                    desc: >
+                        Where the symbol resides (e.g. `src/net/codec.c:120-184`,
+                        `lib/core.dll!0x4012a0`), relative to the root of the code base.
+                    optional: true
+                -   name: PART-OF
+                    desc: >
+                        Reference to the CODE-MAP symbol containing this one (e.g. the type a
+                        method belongs to, the file a type resides in); omitted for a top-level
+                        symbol.
+                    value: "[[SYMBOL:*]]"
+                    optional: true
+                    acyclic: true
+                -   name: IMPLEMENTS
+                    desc: >
+                        Comma-separated references to the specification objects the symbol
+                        implements (e.g. a component, an endpoint, a type, a constant, an
+                        algorithm, a test case), the core of the trace.
+                    value: list([[*]])
                     optional: true

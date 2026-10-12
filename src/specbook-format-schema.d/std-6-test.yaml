@@ -7,7 +7,7 @@
 -   kind: TEST
     name: Test Cases
     id: TC
-    file: 34-TEST-TC-Test-Cases.md
+    file: 37-TEST-TC-Test-Cases.md
     desc: >
         The verifiable conditions and steps used to confirm that requirements, domain rules, use
         case scenarios, state transitions, and the mechanisms, procedures, and decisions of the
@@ -80,8 +80,8 @@
                 nodes: "[[TEST-CASE:*]], [[FR.REQUIREMENT:*]], [[NR.REQUIREMENT:*]], [[RULE:*]],
                     [[SCENARIO:*]], [[WORKFLOW:*]], [[TRANSITION:*]], [[ATTRIBUTE:*]],
                     [[PERMISSION:*]], [[ENDPOINT:*]], [[FRAME:*]], [[FV.COMPONENT:*]], [[UNIT:*]],
-                    [[ASPECT:*]], [[NODE:*]], [[NETWORK:*]], [[CONCERN:*]], [[TACTIC:*]],
-                    [[DECISION:*]]"
+                    [[NC.CONSTANT:*]], [[STRUCTURE:*]], [[ALGORITHM:*]], [[STAGE:*]], [[ASPECT:*]],
+                    [[NODE:*]], [[NETWORK:*]], [[CONCERN:*]], [[TACTIC:*]], [[DECISION:*]]"
                 labeled: true
                 qualified: true
                 config:
@@ -96,7 +96,8 @@
                         USE-CASES scenario objects, the STATE-MODEL transition objects, the
                         DATA-MODEL attribute objects, the AUTHORIZATION-MODEL permission objects,
                         the INTERFACE-ENDPOINTS objects, the DIALOG-STORYBOARD frame objects, the
-                        FUNCTIONALITY-VIEW, CONCURRENCY-VIEW, DEVELOPMENT-ASPECTS, DEPLOYMENT-VIEW
+                        FUNCTIONALITY-VIEW, CONCURRENCY-VIEW, NAMED-CONSTANTS, PROCESSING-VIEW
+                        (structure, algorithm, and stage), DEVELOPMENT-ASPECTS, DEPLOYMENT-VIEW
                         (node and network), OPERATIONS-VIEW, and QUALITY-PERSPECTIVES objects,
                         and/or the DESIGN-DECISIONS objects the test case verifies, so that a
                         scenario (in particular an `Exceptional` one, judged by its `OUTCOME`) is
@@ -111,7 +112,11 @@
                         proven to honor its contract, a frame (judged by the dialog step it
                         storyboards) is proven to be reachable and to behave as storyboarded, a
                         component or unit (judged by its responsibility and dependencies) is proven
-                        to collaborate and to withstand contention as modeled, an aspect (judged by
+                        to collaborate and to withstand contention as modeled, a constant (judged by
+                        its `VALUE` and `CLASS`) is proven to be enforced or honored, a structure
+                        (judged by its `CAPACITY` and `SYNCHRONIZATION`) is proven to hold its bound
+                        under concurrent access, an algorithm or stage (judged by its `INVARIANTS`,
+                        `NUMERICS`, `INPUT`, and `OUTPUT`) is proven to compute as stated, an aspect (judged by
                         the rule it states) is proven to be obeyed by the source structure, a node
                         or network (judged by its `INSTANCES`, `PART-OF`, and `SCOPE`) is proven to
                         be deployed and isolated as modeled, a concern (judged by its procedure) is
@@ -120,7 +125,8 @@
                         with.
                     value: list([[REQUIREMENT:*]], [[RULE:*]], [[SCENARIO:*]], [[TRANSITION:*]],
                         [[ATTRIBUTE:*]], [[PERMISSION:*]], [[ENDPOINT:*]], [[FRAME:*]],
-                        [[FV.COMPONENT:*]], [[UNIT:*]], [[ASPECT:*]], [[NODE:*]], [[NETWORK:*]],
+                        [[FV.COMPONENT:*]], [[UNIT:*]], [[NC.CONSTANT:*]], [[STRUCTURE:*]],
+                        [[ALGORITHM:*]], [[STAGE:*]], [[ASPECT:*]], [[NODE:*]], [[NETWORK:*]],
                         [[CONCERN:*]], [[TACTIC:*]], [[DECISION:*]])
                 -   name: WORKFLOWS
                     desc: >
