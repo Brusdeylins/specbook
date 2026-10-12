@@ -10,7 +10,7 @@ import { Gradia }
 import type { Spec, SpecObject, SpecProperty }
     from "./specbook-format-spec.js"
 import { diagramsOf, type Schema, type SchemaDiagram, type SchemaDiagramCenterEdges,
-    type SchemaDiagramNest, type SchemaDiagramCells }
+    type SchemaDiagramNest, type SchemaDiagramCells, type SchemaDiagramLayers }
     from "./specbook-format-schema.js"
 import { referenceRegex, buildLinkIndex, resolveUnique, resolveSet, anchorPaths,
     expandReferences, plainText, type LinkIndex }
@@ -114,6 +114,29 @@ const cellSpanOf = (parenProps: ParenProps, object: SpecObject, cells: SchemaDia
     }
 }
 
+/*  whether an object acts as a layer of a "layer" diagram, i.e.
+    carries the configured value in the configured property  */
+const isLayer = (parenProps: ParenProps, object: SpecObject, layers: SchemaDiagramLayers): boolean =>
+    plainText(propValue(parenProps, object, layers.property) ?? "").trim() === layers.value
+
+/*  the layer of a node object of a "layer" diagram: the first object
+    reached from it through the references of the "via" property
+    (followed transitively, a cycle ending the search) which acts as a
+    layer, e.g. the layer a module belongs to through its subsystem  */
+const layerOf = (ctx: DiagramContext, node: SpecObject, layers: SchemaDiagramLayers): SpecObject | undefined => {
+    const seen = new Set<SpecObject>()
+    let cur: SpecObject | undefined = node
+    while (cur !== undefined && !seen.has(cur)) {
+        seen.add(cur)
+        if (cur !== node && isLayer(ctx.parenProps, cur, layers))
+            return cur
+        const value: string | undefined = propValue(ctx.parenProps, cur, layers.via)
+        const m: RegExpExecArray | null = value !== undefined ? referenceOnce.exec(plainText(value)) : null
+        cur = m !== null ? resolveUnique(ctx.index, m[1].trim(), cur).target : undefined
+    }
+    return undefined
+}
+
 /*  the Gradia rendering options of a diagram: the presets, for a
     "layout" diagram the cell granularity its nodes demand (bit cells,
     32 per row, as soon as a node is not byte-aligned, byte cells, 16
@@ -208,7 +231,7 @@ interface DiagramNesting {
     derived edge  */
 const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType, center: SpecObject,
     centerUrl: string | undefined, nodes: SpecObject[], edges: DiagramEdge[], nesting: DiagramNesting,
-    config: NonNullable<SchemaDiagram["config"]>): string => {
+    config: NonNullable<SchemaDiagram["config"]>, layers: Map<SpecObject, SpecObject>): string => {
     const { index, anchors, positions, parenProps } = ctx
     const lines  = [ `#type ${type}` ]
     for (const [ key, value ] of Object.entries(config))
@@ -249,6 +272,11 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
             attrs.push(`container: ${diagram.nest.layout}`)
         if (diagram.ordered === true)
             attrs.push(`order: ${orderOf(node)}`)
+
+        /*  the layer of a "layer" node, by the name of its layer object  */
+        const layer = layers.get(node)
+        if (layer !== undefined)
+            attrs.push(`layer: ${atom(plainText(layer.name))}`)
 
         /*  the cell span of a "layout" node, in cells of the configured
             granularity (a variable size spanning the rest of its row)  */
@@ -297,6 +325,9 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
     target lifted to its nearest node  */
 const deriveReferenceEdges = (ctx: DiagramContext, diagram: SchemaDiagram, nodes: SpecObject[],
     nodeSet: Set<SpecObject>): DiagramEdge[] => {
+    /*  the property assigning the layers of a "layer" diagram is the
+        layering itself and hence no edge  */
+    const skip = diagram.type === "layer" ? diagram.layers?.via : undefined
     const { index, anchors, parents, parenProps } = ctx
     const edges = new Array<DiagramEdge>()
 
@@ -323,10 +354,11 @@ const deriveReferenceEdges = (ctx: DiagramContext, diagram: SchemaDiagram, nodes
         walk(node)
         const counts = new Map<string, { target: SpecObject, name?: string, count: number }>()
         for (const object of objects) {
-            const texts: { text: string, name?: string }[] = propsOf(parenProps, object).map((property) => ({
-                text: property.value,
-                name: diagram.labeled === true ? property.key.toLowerCase() : undefined
-            }))
+            const texts: { text: string, name?: string }[] = propsOf(parenProps, object)
+                .filter((property) => property.key !== skip).map((property) => ({
+                    text: property.value,
+                    name: diagram.labeled === true ? property.key.toLowerCase() : undefined
+                }))
             if (diagram.links === "all" && object.description !== undefined) {
                 texts.push({ text: object.description.description })
                 if (object.description.rationale !== undefined)
@@ -746,6 +778,36 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
     }
     else if (cells !== undefined)
         errors.push({ reason: `"${type}" diagram cannot carry a "cells" configuration` })
+
+    /*  a "layer" diagram turns the objects acting as layers into its
+        bands, assigns every other node to the layer it reaches, and
+        orders the nodes by their layers (in the document order of the
+        layer objects), so the bands stack top-down in that order, while
+        a diagram without any layered node is omitted, as it would show
+        no layering at all  */
+    const layerMap = new Map<SpecObject, SpecObject>()
+    const layers   = diagram.layers
+    if (type === "layer") {
+        if (layers === undefined)
+            errors.push({ reason: "\"layer\" diagram requires a \"layers\" configuration" })
+        else {
+            nodes = nodes.filter((node) => !isLayer(ctx.parenProps, node, layers))
+            for (const node of nodes) {
+                const layer = layerOf(ctx, node, layers)
+                if (layer !== undefined)
+                    layerMap.set(node, layer)
+            }
+            if (layerMap.size === 0)
+                nodes = []
+            const rank = (node: SpecObject) => {
+                const layer = layerMap.get(node)
+                return layer !== undefined ? ctx.positions.get(layer) ?? 0 : Number.MAX_SAFE_INTEGER
+            }
+            nodes = nodes.toSorted((a, b) => rank(a) - rank(b) || (ctx.positions.get(a) ?? 0) - (ctx.positions.get(b) ?? 0))
+        }
+    }
+    else if (layers !== undefined)
+        errors.push({ reason: `"${type}" diagram cannot carry a "layers" configuration` })
     const edgeObjects = diagram.edges !== undefined ? resolvePatterns(index, errors, diagram.edges, "edges") : []
     const edgeSet     = new Set<SpecObject>(edgeObjects)
     nodes = nodes.filter((node) => !edgeSet.has(node))
@@ -792,7 +854,7 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         which Gradia rejects, as the nesting already shows them  */
     let nesting: DiagramNesting = { parentOf: new Map(), containers: new Set() }
     if (diagram.nest !== undefined) {
-        if (type === "hub" || type === "layout")
+        if (type === "hub" || type === "layout" || type === "layer")
             errors.push({ reason: `"${type}" diagram cannot carry a "nest" configuration` })
         else {
             nesting = deriveNesting(ctx, diagram.nest, nodes, nodeSet, errors)
@@ -830,7 +892,7 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         return { type, errors }
 
     const config = diagramConfig(ctx, diagram, type, nodes)
-    return { type, spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting, config),
+    return { type, spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting, config, layerMap),
         config, columns, errors }
 }
 

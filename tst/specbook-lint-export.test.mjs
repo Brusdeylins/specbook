@@ -177,3 +177,39 @@ test("HTML export renders both diagrams of a type and the layout fold control", 
     assert.ok(/data-type=["]?layout/.test(text))
     assert.ok(text.includes("fold-layouts"))
 })
+
+test("the functionality view derives a layer diagram from the Layer components", async () => {
+    const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "json" ] })
+    const diagrams = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram
+    assert.ok(Array.isArray(diagrams) && diagrams.length === 2)
+    const layer = diagrams[1]
+    assert.match(layer, /^#type layer/)
+
+    /*  the Layer components become the bands, not nodes, and their
+        "PART-OF" references are the layering, not edges  */
+    assert.doesNotMatch(layer, /COMPONENT-access-layer:/)
+    assert.match(layer, /COMPONENT-gateway: Gateway \[ [^\]]*layer: "Access Layer"/)
+    assert.match(layer, /COMPONENT-ingest: Ingest \[ [^\]]*layer: "Core Layer"/)
+    assert.doesNotMatch(layer, /part-of|-layer\n/)
+    assert.match(layer, /COMPONENT-ingest --> ARCH-FV\.COMPONENT-gateway/)
+})
+
+test("a layer diagram marks the upward dependency in the HTML export", async () => {
+    const [ html ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "html" ] })
+    const text = html.toString("utf8")
+    assert.ok(/data-type=["]?layer/.test(text))
+    assert.ok(text.includes("fold-layers"))
+    assert.ok(text.includes("-alert)"), "the violating edge carries the alert arrow head")
+})
+
+test("a functionality view without layers omits the layer diagram", async () => {
+    const basedir = variant("25-ARCH-FV-Functionality-View.md", "-   KIND: Layer\n\nThe layer facing",
+        "-   KIND: Subsystem\n\nThe layer facing")
+    const file = path.join(basedir, "25-ARCH-FV-Functionality-View.md")
+    fs.writeFileSync(file, fs.readFileSync(file, "utf8")
+        .replace("-   KIND: Layer\n\nThe layer holding", "-   KIND: Subsystem\n\nThe layer holding"), "utf8")
+    const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir, formats: [ "json" ] })
+    const diagram = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram
+    assert.equal(typeof diagram, "string")
+    assert.match(diagram, /^#type graph/)
+})

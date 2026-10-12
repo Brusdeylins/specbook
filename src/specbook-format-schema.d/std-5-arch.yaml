@@ -361,14 +361,22 @@
         -   Brown: The C4 Model (2018),
             https://c4model.com/
     diagram:
-        type: graph
-        nodes: "[[FV.COMPONENT:*]]"
-        labeled: true
-        nest:
+        -   type: graph
+            nodes: "[[FV.COMPONENT:*]]"
+            labeled: true
+            nest:
+                properties:
+                    -   PART-OF
             properties:
-                -   PART-OF
-        properties:
-            -   KIND
+                -   KIND
+        -   type: layer
+            nodes: "[[FV.COMPONENT:*]]"
+            layers:
+                via: PART-OF
+                property: KIND
+                value: Layer
+            properties:
+                -   KIND
     children:
         -   kind: COMPONENT
             desc: >
@@ -411,13 +419,21 @@
                         -   `Connector`: Mediator that conveys interactions between components
                                          (e.g. bus, gateway).
                         -   `Subsystem`: Larger composite grouping several components.
-                    value: enum(Component,Service,Module,Connector,Subsystem)
+                        -   `Layer`:     Horizontal stratum of a layered architecture, grouping
+                                         the components of one level of abstraction, where the
+                                         layers are ordered top-down in document order and a
+                                         component may depend on the components of its own and
+                                         of the lower layers only (the layer diagram of the
+                                         Functionality View marks every dependency pointing
+                                         upwards).
+                    value: enum(Component,Service,Module,Connector,Subsystem,Layer)
                 -   name: PART-OF
                     desc: >
                         Reference to the FUNCTIONALITY-VIEW object this component is contained
                         in, expressing the composition hierarchy the kinds imply: a `Module`
-                        references the component it groups functionality within, and a component
-                        references the `Subsystem` it belongs to; omitted for a top-level
+                        references the component it groups functionality within, a component
+                        references the `Subsystem` it belongs to, and a component or subsystem
+                        references the `Layer` it resides in; omitted for a top-level
                         component.
                     value: "[[FV.COMPONENT:*]]"
                     optional: true
