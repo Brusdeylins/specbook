@@ -768,9 +768,13 @@ objects matching `columns` are its columns and the remaining `nodes` its
 rows, a cell counts the references between its row and its column in
 either direction (e.g. the `VERIFIES` references of a test case onto the
 requirements), and a row or column without any entry is marked as a
-gap, e.g. a requirement no test case verifies (in the violation color),
-or a column without any entry, e.g. a test case verifying rules only (in
-the warning color, as it is noticeable rather than wrong). Under
+gap in the violation color, e.g. a requirement no test case verifies,
+unless the object is related to the other side indirectly, i.e. reaches
+an object of it through the references of its properties via exactly one
+intermediate object (e.g. a test case verifying a rule which constrains
+a requirement, and hence that requirement, too), which marks it in the
+warning color instead, as an indirect trace is noticeable rather than
+missing. Under
 `qualified`, the object kind shared by all rows, and the one shared by
 all columns, become their titles in the corner of the matrix, and a
 legend below every matrix explains the marks it shows.
