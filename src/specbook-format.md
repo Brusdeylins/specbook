@@ -120,12 +120,13 @@ type SchemaDiagramLayers = {
     value:             string
 }
 type SchemaDiagram = {
-    type?:             "graph" | "hub" | "grid" | "layout" | "layer"
+    type?:             "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"
     nodes?:            string
     edges?:            string
     center?:           string | SchemaDiagramCenter
     centerEdges?:      SchemaDiagramCenterEdges
     links?:            "props" | "all"
+    linkProps?:        string[]
     labeled?:          boolean
     edgeSource?:       string
     edgeTarget?:       string
@@ -358,10 +359,11 @@ type SchemaGradiaConfig = Partial<{
     diagram derived for every object of an object kind,
     BECAUSE the relations of a specification are graspable only when drawn
 
--   `SchemaDiagram.type?: "graph" | "hub" | "grid" | "layout" | "layer"`:
+-   `SchemaDiagram.type?: "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"`:
     diagram shape: `graph` (free), `hub` (centered), `grid` (edge-less),
     `layout` (the cells of a binary structure, edge-less), `layer`
-    (stacked layers, marking the edges against the layering),
+    (stacked layers, marking the edges against the layering), `matrix`
+    (a dependency structure matrix, outlining the cycles),
     BECAUSE one object set tells different stories as different shapes
 
 -   `SchemaDiagram.nodes?: string`:
@@ -397,6 +399,11 @@ type SchemaGradiaConfig = Partial<{
     edge source: property values (`props`) or also texts (`all`),
     BECAUSE prose references are incidental and need an opt-in
 
+-   `SchemaDiagram.linkProps?: string[]`:
+    names of the properties whose references derive edges (default: all),
+    BECAUSE not every reference is a dependency (e.g. a `PART-OF`
+    containment beside a `DEPENDS-ON` dependency)
+
 -   `SchemaDiagram.labeled?: boolean`:
     whether the edges derived from property values carry the lower-cased
     property key as their label (default: `false`),
@@ -425,7 +432,7 @@ type SchemaGradiaConfig = Partial<{
     BECAUSE the relations between coarse objects live in their fine parts
 
 -   `SchemaDiagram.onlyConnected?: boolean`:
-    whether a `graph` drops its edge-less nodes (default: `false`),
+    whether a `graph` or `matrix` drops its edge-less nodes (default: `false`),
     BECAUSE isolated nodes dilute a diagram about relationships
 
 -   `SchemaDiagram.collapse?: boolean`:
@@ -651,7 +658,7 @@ An object kind can additionally carry a `diagram` field, which derives
 a [Gradia](https://github.com/rse/gradia) diagram for every object of
 that kind (a list of them derives one diagram per entry, rendered one
 below the other). Its `type` selects the diagram shape (`graph`, `hub`,
-`grid`, `layout`, or `layer`), `nodes` and `edges` select the
+`grid`, `layout`, `layer`, or `matrix`), `nodes` and `edges` select the
 participating objects through comma-separated `[[xxx]]` reference
 patterns (`nodes` defaults to the
 object itself plus all objects below it), and `center` names the object
@@ -736,6 +743,15 @@ in the band of the first layer it reaches through the references of the
 lower layer to a higher one, i.e. against the layering, is drawn dashed
 in the violation color. A `layer` diagram without any layered node is
 omitted, and it accepts neither a `center` nor a `nest`.
+
+A `matrix` diagram draws a dependency structure matrix: its nodes are
+both its rows and its columns (in the order of the `nodes` patterns, or
+in document order under `ordered`), a cell counts the references from
+its row to its column (the arity of the derived edge), and every cycle
+of nodes reaching each other moves into consecutive rows and is
+outlined as a block on the diagonal, as a cyclic dependency defeats any
+layering. It reads better than a `graph` once many nodes depend on many
+others, and accepts neither a `center` nor a `nest`.
 
 ### Coverage
 

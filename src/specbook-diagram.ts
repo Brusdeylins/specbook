@@ -329,8 +329,10 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
 const deriveReferenceEdges = (ctx: DiagramContext, diagram: SchemaDiagram, nodes: SpecObject[],
     nodeSet: Set<SpecObject>): DiagramEdge[] => {
     /*  the property assigning the layers of a "layer" diagram is the
-        layering itself and hence no edge  */
+        layering itself and hence no edge, and a "linkProps" list limits
+        the edges to the references of the listed properties  */
     const skip = diagram.type === "layer" ? diagram.layers?.via : undefined
+    const only = diagram.linkProps !== undefined ? new Set(diagram.linkProps) : undefined
     const { index, anchors, parents, parenProps } = ctx
     const edges = new Array<DiagramEdge>()
 
@@ -358,7 +360,8 @@ const deriveReferenceEdges = (ctx: DiagramContext, diagram: SchemaDiagram, nodes
         const counts = new Map<string, { target: SpecObject, name?: string, count: number }>()
         for (const object of objects) {
             const texts: { text: string, name?: string }[] = propsOf(parenProps, object)
-                .filter((property) => property.key !== skip).map((property) => ({
+                .filter((property) => property.key !== skip && (only?.has(property.key) ?? true))
+                .map((property) => ({
                     text: property.value,
                     name: diagram.labeled === true ? property.key.toLowerCase() : undefined
                 }))
@@ -857,7 +860,7 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         which Gradia rejects, as the nesting already shows them  */
     let nesting: DiagramNesting = { parentOf: new Map(), containers: new Set() }
     if (diagram.nest !== undefined) {
-        if (type === "hub" || type === "layout" || type === "layer")
+        if (type === "hub" || type === "layout" || type === "layer" || type === "matrix")
             errors.push({ reason: `"${type}" diagram cannot carry a "nest" configuration` })
         else {
             nesting = deriveNesting(ctx, diagram.nest, nodes, nodeSet, errors)
@@ -869,9 +872,9 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
     }
 
     /*  the "onlyConnected" filtering keeps only the nodes with at
-        least one incident edge (sensible for "graph" diagrams only),
-        and the containers enclosing such a node  */
-    if (diagram.onlyConnected === true && type === "graph") {
+        least one incident edge (sensible for "graph" and "matrix"
+        diagrams only), and the containers enclosing such a node  */
+    if (diagram.onlyConnected === true && (type === "graph" || type === "matrix")) {
         const connected = new Set<SpecObject>()
         for (const edge of edges) {
             connected.add(edge.source)
