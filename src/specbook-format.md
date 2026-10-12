@@ -122,6 +122,7 @@ type SchemaDiagramLayers = {
 type SchemaDiagram = {
     type?:             "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"
     nodes?:            string
+    columns?:          string
     edges?:            string
     center?:           string | SchemaDiagramCenter
     centerEdges?:      SchemaDiagramCenterEdges
@@ -369,6 +370,13 @@ type SchemaGradiaConfig = Partial<{
 -   `SchemaDiagram.nodes?: string`:
     comma-separated `[[xxx]]` patterns of nodes (default: self and descendants),
     BECAUSE a diagram is readable only when reduced to relevant objects
+
+-   `SchemaDiagram.columns?: string`:
+    comma-separated `[[xxx]]` patterns of the objects forming the columns
+    of a `matrix` (allowed for that type only), turning it into a
+    traceability matrix of the `nodes` as rows against these columns,
+    BECAUSE a trace between two different kinds (e.g. requirements and
+    the test cases verifying them) reveals its gaps as empty lines
 
 -   `SchemaDiagram.edges?: string`:
     comma-separated `[[xxx]]` patterns of the objects acting as edges, not nodes,
@@ -754,6 +762,13 @@ of nodes reaching each other moves into consecutive rows and is
 outlined as a block on the diagonal, as a cyclic dependency defeats any
 layering. It reads better than a `graph` once many nodes depend on many
 others, and accepts neither a `center` nor a `nest`.
+
+With `columns`, a `matrix` diagram is a traceability matrix instead: the
+objects matching `columns` are its columns and the remaining `nodes` its
+rows, a cell counts the references between its row and its column in
+either direction (e.g. the `VERIFIES` references of a test case onto the
+requirements), and a row or column without any entry is marked as a
+gap, e.g. a requirement no test case verifies.
 
 ### Coverage
 

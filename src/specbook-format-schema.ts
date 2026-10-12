@@ -121,6 +121,7 @@ export type SchemaDiagramLayers = {
 export type SchemaDiagram = {
     type?:             "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"
     nodes?:            string
+    columns?:          string
     edges?:            string
     center?:           string | SchemaDiagramCenter
     centerEdges?:      SchemaDiagramCenterEdges
@@ -247,6 +248,7 @@ const SchemaDiagramLayers: v.GenericSchema<SchemaDiagramLayers> = v.strictObject
 const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
     type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout", "layer", "matrix" ])),
     nodes:             v.optional(v.string()),
+    columns:           v.optional(v.string()),
     edges:             v.optional(v.string()),
     center:            v.optional(v.union([ v.string(), SchemaDiagramCenter ])),
     centerEdges:       v.optional(SchemaDiagramCenterEdges),
