@@ -10,12 +10,18 @@
     file: 14-APIS-IM-Interface-Model.md
     desc: >
         The machine-facing interfaces the solution provides to, or requires from, other programs
-        (REST, GraphQL, gRPC, WebSocket, MQTT, AMQP, MCP, CLI, library, or custom ones), each
-        described by its kind, direction, location, and consumers, while the named types,
-        constants, and endpoints of all interfaces are modeled generically in the
+        (REST, GraphQL, gRPC, WebSocket, MQTT, AMQP, MCP, CLI, library, wire protocol, file, or
+        custom ones), each described by its kind, direction, location, and consumers, while the
+        named types, constants, and endpoints of all interfaces are modeled generically in the
         INTERFACE-DATATYPES and INTERFACE-ENDPOINTS artifacts, whose objects reference the
         interfaces they belong to. The artifact is absent when the solution neither provides nor
         requires any machine-facing interface.
+
+        The same model carries the protocols and the data formats of a solution, so they form one
+        family with the other interfaces instead of a catalog of their own: a protocol is an
+        interface (its behavior on the wire: transport, framing, session), a message of it is an
+        endpoint, a format (its structure: encoding, byte order, fields, offsets) is a type, and
+        an element of a format is a field of that type.
     optional: true
     refs: >
         -   OpenAPI Initiative: OpenAPI Specification 3.1 (2021),
@@ -47,11 +53,22 @@
                 belongs to, where the kind-specific parts (HTTP method, GraphQL operation, topic
                 direction, command) are carried by the `OPERATION` and `LOCATOR` properties of the
                 endpoints only.
+
+                A `Protocol` interface states the behavior of the exchange (the `TRANSPORT` it
+                runs on, the `FRAMING` of the messages, and the `SESSION` rules of connection,
+                ordering, and state), its messages are its endpoints, and the structure of each
+                message is a type; a `File` interface states where a file is exchanged, and its
+                content is a type, too. A protocol or format following an open standard references
+                it through `STANDARD` and documents only the profile and deviations the solution
+                uses, instead of restating the standard.
             optional: true
+            mixins:
+                -   EVIDENCE
             diagram:
                 type: hub
                 center: self
-                nodes: "[[INTERFACE:*]], [[TYPE:*]], [[ENDPOINT:*]], [[FV.COMPONENT:*]]"
+                nodes: "[[INTERFACE:*]], [[TYPE:*]], [[ENDPOINT:*]], [[FV.COMPONENT:*]],
+                    [[STAGE:*]], [[SYMBOL:*]]"
                 labeled: true
                 qualified: true
                 config:
@@ -68,8 +85,14 @@
                         -   `MCP`:       Tools, resources, and prompts of a Model Context Protocol server.
                         -   `CLI`:       Commands, options, and arguments of a command-line program.
                         -   `Library`:   Functions, methods, and classes of a programming language library.
+                        -   `Protocol`:  Messages of a wire or inter-process protocol of its own (e.g. a
+                                         binary control protocol, a device protocol), whose behavior the
+                                         `TRANSPORT`, `FRAMING`, and `SESSION` properties state.
+                        -   `File`:      A file or file format exchanged with other programs (e.g. a
+                                         configuration, project, export, or log file), whose content is a
+                                         type of the INTERFACE-DATATYPES.
                         -   `Custom`:    Any other kind of interface, explained in the description.
-                    value: enum(REST,GraphQL,gRPC,WebSocket,MQTT,MCP,CLI,Library,Custom)
+                    value: enum(REST,GraphQL,gRPC,WebSocket,MQTT,MCP,CLI,Library,Protocol,File,Custom)
                 -   name: DIRECTION
                     desc: >
                         Whether the interface is `Provided` by the solution to its consumers or
@@ -81,10 +104,56 @@
                         Where the interface is reached, depending on its `KIND`: the base URL
                         (e.g. `https://api.example.com/v1`), the broker URL or topic prefix (e.g.
                         `wss://broker.example.com/mqtt`, `event/`), the server name (MCP), the
-                        executable name (e.g. `specbook`), or the package or module name (e.g.
-                        `@rse/specbook`).
+                        executable name (e.g. `specbook`), the package or module name (e.g.
+                        `@rse/specbook`), the address of a protocol (e.g. `tcp/8088`, a pipe or
+                        shared memory name, a device path), or the path and extension of a file
+                        (e.g. `~/.config/app/settings.json`, `*.proj`).
                 -   name: VERSION
                     desc: The version of the interface contract (e.g. `1.2`, `2026-08`).
+                    optional: true
+                -   name: TRANSPORT
+                    desc: |
+                        The transport carrying the exchange, independent of the `KIND` (e.g. a
+                        `Protocol` over `TCP`, a `CLI` invoked through `CommandLine`), one of:
+                        -   `TCP`, `UDP`:   A network socket of the transport protocol.
+                        -   `HTTP`, `HTTPS`: Plain or TLS-protected HTTP requests.
+                        -   `WebSocket`:    A WebSocket connection.
+                        -   `LocalSocket`:  A host-local socket (e.g. a Unix domain socket).
+                        -   `NamedPipe`:    A named pipe or FIFO between processes.
+                        -   `SharedMemory`: A memory region shared between processes.
+                        -   `MessageBus`:   An operating system or middleware object or message bus
+                                            (e.g. D-Bus, COM, XPC).
+                        -   `CommandLine`:  The arguments, environment, standard streams, and exit
+                                            code of a process invocation.
+                        -   `File`:         A file written by one side and read by the other.
+                        -   `Device`:       A hardware bus or device driver (e.g. a serial line,
+                                            CAN, USB, an I/O control call).
+                        -   `InProcess`:    Calls within one process (e.g. a library or plug-in).
+                        Omitted when the `KIND` implies the transport (e.g. `REST` over `HTTPS`).
+                    value: enum(TCP,UDP,HTTP,HTTPS,WebSocket,LocalSocket,NamedPipe,SharedMemory,MessageBus,CommandLine,File,Device,InProcess)
+                    optional: true
+                -   name: FRAMING
+                    desc: >
+                        How the messages are delimited and encoded on the `TRANSPORT` (e.g. `4-byte
+                        big-endian length prefix`, `newline-terminated UTF-8 text`, `fixed 188-byte
+                        packets`), so that a reader can split the byte stream into messages before
+                        their types apply; omitted when the `KIND` or the `STANDARD` implies it.
+                    optional: true
+                -   name: SESSION
+                    desc: >
+                        The behavior of the exchange over time: how a session is opened (e.g. a
+                        handshake), kept alive, and closed, the order the messages have to follow,
+                        and the state either side keeps between them (e.g. `hello, then commands,
+                        heartbeat every 5 s, idle close after 30 s`); omitted for a stateless
+                        interface.
+                    optional: true
+                -   name: STANDARD
+                    desc: >
+                        The URL of the open standard or the upstream implementation the interface
+                        follows (e.g. an RFC, a vendor specification, an open-source repository),
+                        so that only the profile used and the deviations from it are documented
+                        here instead of the standard itself.
+                    value: /https?:\/\/\S+/
                     optional: true
                 -   name: CONSUMERS
                     desc: >
@@ -132,11 +201,19 @@
                 `BASE` is a scalar, enumeration, alias, or union type without fields. Either
                 kind of type additionally carries the named fixed values agreed upon through
                 its interfaces as its `CONSTANT` objects.
+
+                A type is also the format of a message of a `Protocol` interface or of the content
+                of a `File` interface: its `ENCODING` and `ENDIANNESS` state how it is serialized,
+                and the `OFFSET` and `SIZE` of its fields state their exact position within a
+                binary layout.
             optional: true
+            mixins:
+                -   EVIDENCE
             diagram:
                 type: hub
                 center: self
-                nodes: "[[TYPE:*]], [[INTERFACE:*]], [[ENDPOINT:*]]"
+                nodes: "[[TYPE:*]], [[INTERFACE:*]], [[ENDPOINT:*]], [[STRUCTURE:*]],
+                    [[ALGORITHM:*]], [[STAGE:*]], [[SYMBOL:*]]"
                 deep: true
                 labeled: true
                 qualified: true
@@ -182,14 +259,36 @@
                         entities), tracing the interface into the data model.
                     value: list([[DM.ENTITY:*]])
                     optional: true
+                -   name: ENCODING
+                    desc: >
+                        The serialization of the type on the wire or in a file (e.g. `JSON`,
+                        `XML`, `Protocol Buffers`, `UTF-8 text, one record per line`, `packed
+                        binary`, `ZIP container of XML parts`); omitted when the `KIND` of the
+                        interfaces implies it (e.g. JSON for `REST`).
+                    optional: true
+                -   name: ENDIANNESS
+                    desc: >
+                        The byte order of the multi-byte numbers of a binary encoding, `Little`
+                        or `Big`; omitted for a textual encoding or one which defines it itself.
+                    value: enum(Little,Big)
+                    optional: true
+                -   name: STANDARD
+                    desc: >
+                        The URL of the open specification or the upstream implementation the
+                        format follows (e.g. an ISO or RFC document, an open-source codec), so
+                        that only the profile used and the deviations from it are documented
+                        here instead of the specification itself.
+                    value: /https?:\/\/\S+/
+                    optional: true
             children:
                 -   kind: FIELD
-                    name: "[A-Za-z_][A-Za-z0-9_-]*"
+                    name: "[A-Za-z_@][A-Za-z0-9_@.:-]*"
                     desc: >
                         A named field of an object type, carrying a per-type unique
                         identifier in the naming convention of the interface (e.g.
-                        `eventId`, `event_id`, `event-id`) and described by a 1-sentence
-                        description ("what") plus a 1-sentence rationale ("why").
+                        `eventId`, `event_id`, `event-id`, or `@version` for an XML
+                        attribute) and described by a 1-sentence description ("what") plus
+                        a 1-sentence rationale ("why").
                     optional: true
                     format:
                         maxTableColumns: 5
@@ -223,6 +322,22 @@
                                 as a short phrase stating a range, unit, pattern, or
                                 invariant (e.g. `1..100`, `RFC 5322 address`).
                             value: /.+/
+                            optional: true
+                        -   name: OFFSET
+                            desc: >
+                                The byte offset of the field from the start of its type in
+                                a binary layout (decimal or `0x` hexadecimal, optionally
+                                with a bit position as `<byte>.<bit>`); omitted for a
+                                textual encoding, where the order of the fields suffices.
+                            value: /(?:0x[0-9A-Fa-f]+|\d+)(?:\.[0-7])?/
+                            optional: true
+                        -   name: SIZE
+                            desc: >
+                                The size of the field in a binary layout, in bytes or, with
+                                the unit `bit`, in bits (e.g. `4`, `12 bit`), or `variable`
+                                for a field whose size another field states; omitted for a
+                                textual encoding.
+                            value: /\d+(?:\s*bit)?|variable/
                             optional: true
                 -   kind: CONSTANT
                     name: "[A-Za-z_][A-Za-z0-9_-]*"
@@ -303,12 +418,19 @@
                 Endpoints form a flat list: a hierarchy of sub-commands or sub-resources
                 is expressed by a path-style `LOCATOR` (e.g. `remote add`,
                 `/events/{eventId}/chat`) only.
+
+                A message of a `Protocol` interface is an endpoint, too: its `LOCATOR` is the
+                wire identifier of the message (e.g. a numeric code or a command word), its
+                `ARGUMENT` objects carry the payload as types (the formats of the message),
+                and its `RESULT` objects the reply, omitted for a one-way message.
             optional: true
+            mixins:
+                -   EVIDENCE
             diagram:
                 type: hub
                 center: self
-                nodes: "[[ENDPOINT:*]], [[TYPE:*]], [[CONSTANT:*]], [[INTERFACE:*]],
-                    [[PERMISSION:*]]"
+                nodes: "[[ENDPOINT:*]], [[TYPE:*]], [[ID.TYPE:*.CONSTANT:*]], [[INTERFACE:*]],
+                    [[PERMISSION:*]], [[STAGE:*]], [[SYMBOL:*]]"
                 deep: true
                 labeled: true
                 qualified: true
@@ -340,7 +462,8 @@
                             (`gRPC`).
                         -   `publish`, `subscribe`: the message direction from the
                             perspective of the interface consumer (`WebSocket`, `MQTT`,
-                            `AMQP`).
+                            `AMQP`, `Protocol`), where a request answered by a reply is a
+                            `call` instead.
                         -   `tool`, `resource`, `prompt`: the MCP primitive (`MCP`).
                         -   `command`: a command or sub-command (`CLI`).
                         -   `function`, `method`, `constructor`, `event`: the callable or
@@ -354,7 +477,8 @@
                         `/events/{eventId}/chat`), the GraphQL field name, the topic
                         pattern (e.g. `event/{eventId}/chat`), the tool, resource, or
                         prompt name, the command path of words (e.g. `specbook lint`),
-                        or the symbol (e.g. `SpecBook.lint`); defaults to the
+                        the symbol (e.g. `SpecBook.lint`), or the wire identifier of a
+                        protocol message (e.g. `0x21`, `SETVOL`); defaults to the
                         endpoint name.
                     value: /.+/
                     optional: true

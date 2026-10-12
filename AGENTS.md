@@ -145,6 +145,11 @@ API.
     `package.json`, `plugin/.claude-plugin/plugin.json`, and
     `web/package.json` in sync),
     and the artwork (logos, posters, screenshots)
+-   `tst/`: the tests of the built project (`node --test`, run by
+    `npm start test`) of the schema configuration (the standard schema
+    and the mixins), of linting, and of exporting, partly against the
+    small specification `tst/fixture/` exercising the Named Constants,
+    Processing View, and Code Map artifacts
 -   `smp/`: the sample specification corpus (`broadcast/`, based on the
     standard schema configuration, exported into the git-ignored
     `smp/broadcast.*` files) and a small standalone sample (`sample/`,
@@ -178,6 +183,7 @@ script is `npm start`, which invokes stx with `etc/stx.conf`:
 ```
 npm start build            # lint + build-cmd
 npm start build-cmd        # tsc, stylus+postcss, and the asset copies (all into dst/)
+npm start test             # build-cmd + node --test on tst/*.test.mjs
 npm start lint             # eslint on src/*.ts and src/specbook-format-schema.d/*.yaml, markdownlint-cli2 on src/specbook-format.md and plugin/skills/*/*.md
 npm start build-watch      # nodemon rebuild on src/**/*.{ts,md}
 npm start lint-watch       # nodemon relint on src/**/*.{ts,md}
@@ -198,7 +204,8 @@ faces as base64 `data:` URIs), copies the client-side search script and
 into `dst/specbook-format.yaml`, and copies the two theme variants of the
 logo.
 
-No test target is defined.
+The `test` target runs the `node:test` suites below `tst/` against
+the compiled `dst/` (no extra dependency).
 
 ## Website
 
@@ -268,9 +275,19 @@ bundled standard one, and a pattern matching no file being an error) are
 merged in order into one effective schema configuration (the later files
 into the earlier ones, via `mergeWith` of `es-toolkit`), where the
 objects merge deeply and the list elements are matched by identity
-(artifacts by `kind` plus `id`/`name`, nested objects by `kind`,
-properties by `name`): every file has to be valid YAML on its own, while
-the merged result alone is validated.
+(artifacts by `kind` plus `id`/`name`, mixins by `mixin`, nested
+objects by `kind`, properties by `name`): every file has to be valid
+YAML on its own, while the merged result alone is validated.
+
+A first-level entry carrying a `mixin` field instead of a `kind` is a
+*mixin*, a named group of properties (e.g. the `EVIDENCE` group of the
+standard schema), which every object kind listing it in its `mixins`
+field receives as if declared itself (its own property of the same name
+taking precedence). `loadConfig` of `src/specbook-config.ts` validates
+the mixins (Valibot, `SchemaConfig`), reports an unknown mixin name, and
+expands the mixins only after the merge, so every consumer sees plain
+object kinds (`Schema`) and a later file can extend a mixin or let an
+earlier kind include one.
 
 The API methods and MCP tools take the patterns as `string[]`, and
 `SPECBOOK_CONFIG` carries a `path.delimiter`-separated list of patterns.

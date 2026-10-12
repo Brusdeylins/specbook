@@ -77,7 +77,7 @@ publish/subscribe propagates every change to all clients within the required tim
 -   ADDRESSES:  [[REQUIREMENT:throttling]]
 -   MECHANISM:  per-user rate limiting plus client and server sentiment filtering
 -   TRADES-OFF: Usability
--   AFFECTS:    [[COMPONENT:service]], [[COMPONENT:client-nlp]]
+-   AFFECTS:    [[COMPONENT:service]], [[COMPONENT:client-nlp]], [[CONSTANT:submission-limit]], [[ALGORITHM:sliding-window]]
 -   TOOLS:      [[COMPONENT:client-sentiment]]
 
 Interaction is protected by configurable per-user throttling and optional client- and server-side sentiment checks,
