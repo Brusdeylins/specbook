@@ -746,8 +746,10 @@ omitted, and it accepts neither a `center` nor a `nest`.
 
 A `matrix` diagram draws a dependency structure matrix: its nodes are
 both its rows and its columns (in the order of the `nodes` patterns, or
-in document order under `ordered`), a cell counts the references from
-its row to its column (the arity of the derived edge), and every cycle
+in document order under `ordered`), and reads from a row to its columns:
+a cell counts the references from its row to its column (the arity of
+the derived edge), i.e. how often the row depends on the column, and
+every cycle
 of nodes reaching each other moves into consecutive rows and is
 outlined as a block on the diagonal, as a cyclic dependency defeats any
 layering. It reads better than a `graph` once many nodes depend on many
