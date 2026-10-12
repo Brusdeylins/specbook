@@ -18,7 +18,7 @@ import { stylesheet, searchScript, isTitleObject, titleObject,
     from "./specbook-export-common.js"
 import { collectSchemas }
     from "./specbook-parse-semantic.js"
-import { renderDiagrams }
+import { renderDiagrams, type DiagramType }
     from "./specbook-diagram.js"
 import { optimizeImages, analyzeImages }
     from "./specbook-export-image.js"
@@ -77,6 +77,12 @@ export const titlePageObject = (specification: Spec): SpecObject | undefined => 
     return title !== undefined && title.value.trim() !== "" ? object : undefined
 }
 
+/*  a pre-rendered diagram of an object, scaled for embedding  */
+interface ScaledDiagram {
+    type: DiagramType
+    svg:  string
+}
+
 /*  pre-render the configured diagrams as embeddable SVGs, displayed
     at a reduced coordinate scale, as the Gradia geometry (node
     boxes, font sizes) is dimensioned for a stand-alone canvas and
@@ -91,12 +97,14 @@ export const titlePageObject = (specification: Spec): SpecObject | undefined => 
     inside an SVG, but plain text inside the HTML <style> element,
     which no unescaped "</" of a configured value may close)  */
 const scaledDiagrams = async (specification: Spec, config: Schema,
-    verbose?: Verbose, omit?: Set<OmitAspect>): Promise<{ svgs: Map<SpecObject, string>, css: string }> => {
+    verbose?: Verbose, omit?: Set<OmitAspect>): Promise<{ svgs: Map<SpecObject, ScaledDiagram[]>, css: string }> => {
     const scale    = 0.5
-    const rendered = new Map<SpecObject, string>()
+    const rendered = new Map<SpecObject, ScaledDiagram[]>()
     const rules    = new Set<string>()
     const entities: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"" }
-    for (const [ object, result ] of await renderDiagrams(specification, config, verbose, omit)) {
+    const entries = Array.from(await renderDiagrams(specification, config, verbose, omit))
+        .flatMap(([ object, results ]) => results.map((result) => ({ object, result })))
+    for (const { object, result } of entries) {
         const svg = result.svg.replace(/<style>([\s\S]*?)<\/style>\s*/g, (_, css: string) => {
             for (const rule of css.split("\n"))
                 if (rule.trim() !== "")
@@ -116,10 +124,11 @@ const scaledDiagrams = async (specification: Spec, config: Schema,
         const pad    = absent * (
             (result.config?.["size-node-width-min"]  ?? Gradia.config["size-node-width-min"]) +
             (result.config?.["hub-channel-width-min"] ?? Gradia.config["hub-channel-width-min"]))
-        rendered.set(object, svg.replace(/(<svg[^>]*) width="([0-9.]+)" height="([0-9.]+)"/,
-            (_, head: string, w: string, h: string) =>
-                `${head} width="${Number(w) * scale}" height="${Number(h) * scale}"` +
-                (absent > 0 ? ` style="max-width: ${(Number(w) / (Number(w) + pad) * 100).toFixed(2)}%"` : "")))
+        rendered.set(object, [ ...(rendered.get(object) ?? []), { type: result.type,
+            svg: svg.replace(/(<svg[^>]*) width="([0-9.]+)" height="([0-9.]+)"/,
+                (_, head: string, w: string, h: string) =>
+                    `${head} width="${Number(w) * scale}" height="${Number(h) * scale}"` +
+                    (absent > 0 ? ` style="max-width: ${(Number(w) / (Number(w) + pad) * 100).toFixed(2)}%"` : "")) } ])
     }
     return { svgs: rendered, css: Array.from(rules).join("\n") }
 }
@@ -141,14 +150,15 @@ export const renderPlaceholder = (message: string): string =>
 
 /*  wrap the pre-rendered diagrams into their blocks, carrying the
     diagram type and the object tree nesting level the folding
-    distinguishes (the top-level objects of an artifact being level 1)  */
-const wrapDiagrams = (svgs: Map<SpecObject, string>,
-    schemas: Map<SpecObject, SchemaObject> | null, levels: Map<SpecObject, number>): Map<SpecObject, string> => {
+    distinguishes (the top-level objects of an artifact being level 1),
+    the several diagrams of an object following each other  */
+const wrapDiagrams = (svgs: Map<SpecObject, ScaledDiagram[]>,
+    levels: Map<SpecObject, number>): Map<SpecObject, string> => {
     const blocks = new Map<SpecObject, string>()
-    for (const [ object, svg ] of svgs) {
+    for (const [ object, diagrams ] of svgs) {
         const level = levels.get(object) ?? 1
-        const type  = schemas?.get(object)?.diagram?.type ?? "graph"
-        blocks.set(object, `<div class="diagram" data-type="${type}" data-level="${level}">${svg}</div>`)
+        blocks.set(object, diagrams.map(({ type, svg }) =>
+            `<div class="diagram" data-type="${type}" data-level="${level}">${svg}</div>`).join(""))
     }
     return blocks
 }
@@ -210,7 +220,7 @@ const prepareDocument = async (specification: Spec, config: Schema | undefined,
 
     /*  wrap the diagrams into their blocks, carrying the diagram type
         and the object tree nesting level the folding distinguishes  */
-    const diagrams = rendered !== null ? wrapDiagrams(rendered.svgs, schemas, levels) : null
+    const diagrams = rendered !== null ? wrapDiagrams(rendered.svgs, levels) : null
 
     /*  the document language selects the smart typography quote style  */
     const lang = documentLang(specification)

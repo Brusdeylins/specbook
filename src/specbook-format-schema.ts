@@ -42,7 +42,7 @@ export type SchemaObject = {
     referenced?:       string[]
     coverage?:         string[]
     automaton?:        SchemaAutomaton
-    diagram?:          SchemaDiagram
+    diagram?:          SchemaDiagram | SchemaDiagram[]
     format?:           SchemaFormat
     props?:            SchemaProperty[]
     children?:         SchemaObject[]
@@ -97,11 +97,20 @@ export type SchemaDiagramNest = {
     crossing?:         "nodes" | "target" | "both"
 }
 
+/*  the cells of a "layout" diagram: the properties of the node objects
+    carrying their byte offset, their size (in bytes or bits), and their
+    optional fixed value  */
+export type SchemaDiagramCells = {
+    offset:            string
+    size:              string
+    value?:            string
+}
+
 /*  the diagram derived for every object of an object kind: its shape,
     its node/edge selection, the edge property roles, the derivation
     switches, the node nesting, and the node annotations  */
 export type SchemaDiagram = {
-    type?:             "graph" | "hub" | "grid"
+    type?:             "graph" | "hub" | "grid" | "layout"
     nodes?:            string
     edges?:            string
     center?:           string | SchemaDiagramCenter
@@ -118,9 +127,14 @@ export type SchemaDiagram = {
     qualified?:        boolean
     ordered?:          boolean
     nest?:             SchemaDiagramNest
+    cells?:            SchemaDiagramCells
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
+
+/*  the diagrams of an object kind: none, its single one, or its list  */
+export const diagramsOf = (object: SchemaObject | undefined): SchemaDiagram[] =>
+    object?.diagram === undefined ? [] : Array.isArray(object.diagram) ? object.diagram : [ object.diagram ]
 
 /*  the HTML/PDF rendering of the objects of an object kind among their
     siblings: "complex" (sections), "concise" (tables), "compact" (tables
@@ -209,8 +223,13 @@ const SchemaDiagramNest: v.GenericSchema<SchemaDiagramNest> = v.strictObject({
     layout:            v.optional(v.picklist([ "graph", "hub", "grid" ])),
     crossing:          v.optional(v.picklist([ "nodes", "target", "both" ]))
 })
+const SchemaDiagramCells: v.GenericSchema<SchemaDiagramCells> = v.strictObject({
+    offset:            v.string(),
+    size:              v.string(),
+    value:             v.optional(v.string())
+})
 const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
-    type:              v.optional(v.picklist([ "graph", "hub", "grid" ])),
+    type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout" ])),
     nodes:             v.optional(v.string()),
     edges:             v.optional(v.string()),
     center:            v.optional(v.union([ v.string(), SchemaDiagramCenter ])),
@@ -227,6 +246,7 @@ const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
     qualified:         v.optional(v.boolean()),
     ordered:           v.optional(v.boolean()),
     nest:              v.optional(SchemaDiagramNest),
+    cells:             v.optional(SchemaDiagramCells),
     properties:        v.optional(v.array(v.string())),
     config:            v.optional(SchemaDiagramConfig)
 })
@@ -248,7 +268,8 @@ const SchemaObject: v.GenericSchema<SchemaObject> = v.strictObject({
     referenced:        v.optional(v.pipe(v.array(v.string()), v.minLength(1))),
     coverage:          v.optional(v.pipe(v.array(v.string()), v.minLength(1))),
     automaton:         v.optional(SchemaAutomaton),
-    diagram:           v.optional(SchemaDiagram),
+    diagram:           v.optional(v.lazy((input) => Array.isArray(input) ?
+        v.pipe(v.array(SchemaDiagram), v.minLength(1)) : SchemaDiagram)),
     format:            v.optional(SchemaFormat),
     props:             v.optional(v.array(SchemaProperty)),
     children:          v.optional(v.array(v.lazy(() => SchemaObject)))

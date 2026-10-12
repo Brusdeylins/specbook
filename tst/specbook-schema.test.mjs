@@ -160,3 +160,41 @@ test("mixin without properties is rejected structurally", () => {
     assert.equal(config, undefined)
     assert.match(diagnostics[0].message, /invalid configuration: 0\.props/)
 })
+
+test("diagram lists validate, merge by type, and check the layout cells", () => {
+    const [ base, overlay, broken ] = configFiles(`
+-   kind: SPEC
+    name: Things
+    file: things.md
+    diagram:
+        -   type: grid
+        -   type: layout
+            cells:
+                offset: OFFSET
+                size: SIZE
+`, `
+-   kind: SPEC
+    name: Things
+    diagram:
+        -   type: layout
+            cells:
+                offset: OFFSET
+                size: SIZE
+                value: VALUE
+`, `
+-   kind: SPEC
+    name: Things
+    file: things.md
+    diagram:
+        type: layout
+        cells:
+            offset: OFFSET
+`)
+    const { config, diagnostics } = loadConfig([ base, overlay ])
+    assert.deepEqual(diagnostics, [])
+    assert.equal(config[0].diagram.length, 2)
+    assert.deepEqual(config[0].diagram[1].cells, { offset: "OFFSET", size: "SIZE", value: "VALUE" })
+    const result = loadConfig([ broken ])
+    assert.equal(result.config, undefined)
+    assert.match(result.diagnostics[0].message, /cells/)
+})

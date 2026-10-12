@@ -35,13 +35,16 @@ export const lineColOfPath = (doc: Document, lines: LineCounter, path: YamlPath)
     are matched on merging: the artifacts by their kind plus id or name,
     the mixins by their name, and the nested objects by their kind alone
     (exactly like the sibling resolution), the properties by their name,
-    and the scalar entries by their value  */
+    the diagrams of a diagram list by their type, and the scalar entries
+    by their value  */
 const identityOf = (item: unknown, list?: string): string => {
     if (!isPlainObject(item))
         return String(item)
     const object = item as Record<string, unknown>
     if (list === "props")
         return String(object.name ?? "")
+    else if (list === "diagram")
+        return String(object.type ?? "graph")
     else if (list === "children")
         return String(object.kind ?? "")
     else if (isSchemaMixin(object))

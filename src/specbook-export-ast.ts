@@ -37,7 +37,7 @@ export type AstFormat = "json" | "json5" | "yaml" | "toon"
 /*  the plain JSON shape of the specification (as far as the diagram
     and coverage attachments below have to navigate it)  */
 interface PlainCoverage      { pattern: string, covered: number, total: number }
-interface PlainObject        { diagram?: string, coverage?: PlainCoverage[], children: PlainObject[] }
+interface PlainObject        { diagram?: string | string[], coverage?: PlainCoverage[], children: PlainObject[] }
 interface PlainSpecification { artifacts: { objects: PlainObject[] }[] }
 
 /*  render the specification AST into a serialization format,
@@ -79,12 +79,13 @@ export const renderAst = async (specification: Spec, format: AstFormat,
         for machine consumption)  */
     if (config !== undefined) {
         const diagrams  = specDiagrams(specification, config)
-        const omitted   = omittedDiagrams(specification, config, omit)
+        const omitted   = omittedDiagrams(specification, omit)
         const coverages = specCoverage(buildLinkIndex(specification), collectSchemas(specification, config))
         const walk = (object: SpecObject, node: PlainObject) => {
-            const result = diagrams.get(object)
-            if (result?.spec !== undefined && !isTitleObject(object) && !omitted.has(object))
-                node.diagram = result.spec
+            const specs = isTitleObject(object) ? [] : (diagrams.get(object) ?? [])
+                .flatMap((result) => result.spec !== undefined && !omitted(object, result.type) ? [ result.spec ] : [])
+            if (specs.length > 0)
+                node.diagram = specs.length === 1 ? specs[0] : specs
             const coverage = coverages.get(object)
             if (coverage !== undefined)
                 node.coverage = coverage.map(({ pattern, covered, uncovered }) =>

@@ -106,12 +106,11 @@ const renderConciseMd = (object: SpecObject, depth = 0): string => {
     level 6, the deepest one Markdown knows, below which the children are
     concise regardless -- and the optionally derived Gradia diagram spec
     embedded as a "gradia" fenced code block below the heading  */
-const renderObjectMd = (object: SpecObject, level: number, diagrams?: Map<SpecObject, string>): string => {
+const renderObjectMd = (object: SpecObject, level: number, diagrams?: Map<SpecObject, string[]>): string => {
     const heading = `${"#".repeat(level)}${" ".repeat(Math.max(1, 4 - level))}` +
         `${object.kind}: ${object.name}${nameSuffixMd(object)}`
     const parts = [ heading ]
-    const spec  = diagrams?.get(object)
-    if (spec !== undefined)
+    for (const spec of diagrams?.get(object) ?? [])
         parts.push(`\`\`\`gradia\n${spec}\`\`\``)
     if (object.properties.length > 0)
         parts.push(renderKeyValuesMd(object.properties))
@@ -154,11 +153,13 @@ export const renderMarkdown = async (specification: Spec,
         (an invalid diagram situation omits the diagram, as it is
         already reported as a lint diagnostic, and the diagram of
         the title object is reserved for the HTML/PDF export)  */
-    const diagrams = new Map<SpecObject, string>()
+    const diagrams = new Map<SpecObject, string[]>()
     if (config !== undefined)
-        for (const [ object, result ] of specDiagrams(specification, config))
-            if (result.spec !== undefined && !isTitleObject(object))
-                diagrams.set(object, result.spec)
+        for (const [ object, results ] of specDiagrams(specification, config)) {
+            const specs = results.flatMap((result) => result.spec !== undefined ? [ result.spec ] : [])
+            if (specs.length > 0 && !isTitleObject(object))
+                diagrams.set(object, specs)
+        }
 
     /*  embed the images of a text, optimized like the ones of the HTML
         export: an embeddable "![alt](file)" becomes the reference-style
