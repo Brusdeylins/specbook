@@ -65,11 +65,9 @@ export interface DiagramResult {
     defaults, as that very coordinate scale would otherwise shrink them
     below a comfortably readable size (the "--gradia-size-font-*" custom
     properties of the stylesheet mirror them for a display-time tweak).
-    The parallel edges are spread further apart for the same reason, the
-    "graph" channels are practically uncapped, as a capped channel
-    squeezes its many edges into an unreadable bundle, and they keep
-    their edges far enough from the node boxes for an arrow head plus
-    the corner in front of it, so neither a corner nor a hop touches it  */
+    The parallel edges are spread further apart for the same reason, and
+    the "graph" channels are practically uncapped, as a capped channel
+    squeezes its many edges into an unreadable bundle  */
 const diagramPresets: NonNullable<SchemaDiagram["config"]> = {
     "size-canvas-margin":      8,
     "size-node-height-scale":  2,
@@ -78,7 +76,6 @@ const diagramPresets: NonNullable<SchemaDiagram["config"]> = {
     "size-font-arity":         19,
     "size-edge-track-gap":     20,
     "graph-channel-width-max": 1000,
-    "graph-channel-padding":   36,
     "hub-node-gap":            10,
     "hub-node-count-max":      6,
     "grid-gap-horizontal":     24,
