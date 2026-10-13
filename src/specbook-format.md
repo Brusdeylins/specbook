@@ -119,6 +119,11 @@ type SchemaDiagramLayers = {
     property:          string
     value:             string
 }
+type SchemaDiagramEdgeLabels = {
+    source:            string
+    target:            string
+    properties?:       string[]
+}
 type SchemaDiagramShape = {
     property:          string
     value:             string
@@ -146,6 +151,7 @@ type SchemaDiagram = {
     cells?:            SchemaDiagramCells
     layers?:           SchemaDiagramLayers
     shapes?:           SchemaDiagramShape[]
+    edgeLabels?:       SchemaDiagramEdgeLabels
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -532,6 +538,15 @@ type SchemaGradiaConfig = Partial<{
     instances), `person`, `device`, or the default `box`,
     BECAUSE a datastore, an external service, or a pool of instances is
     recognized at a glance by its familiar symbol
+
+-   `SchemaDiagram.edgeLabels?: SchemaDiagramEdgeLabels`:
+    naming of every edge after the objects connecting its ends: the ones
+    its source references through the `source` property and its target
+    through the `target` property (e.g. the interface a component
+    `CONSUMES` and another one `PROVIDES`), by their `properties` values
+    joined with ` / ` (default: their names), an edge without any
+    connecting object keeping its name,
+    BECAUSE a dependency reads best by the protocol it is exercised over
 
 -   `SchemaDiagramCells.value?: string`:
     property carrying the fixed value of a node, shown inside its cells,

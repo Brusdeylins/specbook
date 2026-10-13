@@ -69,6 +69,7 @@ The layer holding the persistent state, BECAUSE the data outlives every process 
 
 -   KIND:           Subsystem
 -   PART-OF:        [[COMPONENT:client-layer]]
+-   CONSUMES:       [[INTERFACE:live-topics]]
 -   REALIZES:       [[REQUIREMENT:name-appearance]], [[REQUIREMENT:browser-access]], [[REQUIREMENT:individual-url]], [[REQUIREMENT:user-consent]], [[REQUIREMENT:provider-switch]]
 -   DEPENDS-ON:     [[COMPONENT:relay]]
 
@@ -109,6 +110,7 @@ horizontally per environment, BECAUSE request handling must scale independently 
 
 -   KIND:           Connector
 -   PART-OF:        [[COMPONENT:relay-layer]]
+-   PROVIDES:       [[INTERFACE:live-topics]]
 -   PATTERNS:       [[PATTERN:pub-sub]], [[PATTERN:stateless-pool]]
 -   DEPENDS-ON:     [[COMPONENT:service]]
 

@@ -258,4 +258,9 @@ test("the layers of the sample nest into groups and the datastore is drawn as a 
     assert.match(layer, /COMPONENT-database: Database \[ [^\]]*layer: "Database Layer", layer-group: "Server Layers", shape: database/)
     assert.match(layer, /COMPONENT-auth: "Authentication Service" \[ [^\]]*layer: "Service Layer"/)
     assert.doesNotMatch(layer, /COMPONENT-server-layers:/)
+
+    /*  the dependency through a consumed and provided interface is
+        named after the kind and the transport of that interface  */
+    assert.match(layer, /COMPONENT-client --\("MQTT \/ WebSocket"\)--> ARCH-FV\.COMPONENT-relay/)
+    assert.match(layer, /COMPONENT-proxy --> ARCH-FV\.COMPONENT-relay/)
 })
