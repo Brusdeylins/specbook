@@ -264,3 +264,22 @@ test("the layers of the sample nest into groups and the datastore is drawn as a 
     assert.match(layer, /COMPONENT-client --\("MQTT \/ WebSocket"\)--> ARCH-FV\.COMPONENT-relay/)
     assert.match(layer, /COMPONENT-proxy --> ARCH-FV\.COMPONENT-relay/)
 })
+
+test("a domain workflow derives a sequence diagram of its handoffs between the actors", async () => {
+    const [ json ] = await new SpecBook().export({ config: [ "std" ],
+        basedir: path.join(root, "smp", "broadcast"), formats: [ "json" ] })
+    const sequence = objectOf(JSON.parse(json.toString("utf8")), "WORKFLOW", "Run Broadcast Event").diagram[1]
+    assert.match(sequence, /^#type sequence/)
+
+    /*  the roles are the lifelines (in the order of their first
+        appearance), the handoffs the messages in document order  */
+    const lines = sequence.split("\n")
+    const roles = lines.filter((line) => /^REQS-UP\.ROLE-\S+: /.test(line))
+    assert.deepEqual(roles.map((line) => line.split(":")[0]), [ "REQS-UP.ROLE-manager",
+        "REQS-UP.ROLE-presenter", "REQS-UP.ROLE-attendee", "REQS-UP.ROLE-moderator" ])
+    assert.ok(roles.every((line) => line.includes("shape: person")))
+    const messages = lines.filter((line) => line.includes("-->"))
+    assert.equal(messages.length, 12)
+    assert.match(messages[0], /ROLE-manager --\(import\)--> REQS-UP\.ROLE-manager/)
+    assert.match(messages[7], /ROLE-moderator --\(forward\)--> REQS-UP\.ROLE-presenter/)
+})

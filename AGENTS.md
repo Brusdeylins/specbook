@@ -634,9 +634,9 @@ color,
 and a running search unfolds
 everything, so no match hides inside. Everything starts out
 unfolded, while the folding tab slides
-out thirteen controls (exactly as the search tab slides out its input
+out fourteen controls (exactly as the search tab slides out its input
 field), which fold and unfold at once all diagrams of a type (`graph`,
-`hub`, `grid`, `layout`, `layer`, `matrix`, the Mermaid/D2 ones as `code`, the images and PDF
+`hub`, `grid`, `layout`, `layer`, `matrix`, `sequence`, the Mermaid/D2 ones as `code`, the images and PDF
 pages as `image`, and the code listings as `listing`, each with an icon
 of its own), all diagrams from an
 object tree nesting level on (`1`, hence all, `2`, and `3`, a nesting
@@ -659,7 +659,7 @@ The option `-O`/`--omit <aspect>[,...]` of `export` and `preview`
 validated up-front by `parseOmit` of `src/specbook-export-common.ts`)
 omits content aspects at generation time instead of leaving them
 foldable. The aspects match the sets of the folding controls:
-`diagram:graph`, `diagram:hub`, `diagram:grid`, `diagram:layout`, `diagram:layer`, `diagram:matrix`, `diagram:code`,
+`diagram:graph`, `diagram:hub`, `diagram:grid`, `diagram:layout`, `diagram:layer`, `diagram:matrix`, `diagram:sequence`, `diagram:code`,
 `diagram:image`, `diagram:listing`, `diagram:1` (alias
 `diagram`, hence all diagrams, the "Diagram of Contents" page included),
 `diagram:2`, `diagram:3`, and `text:long`. An omitted diagram
@@ -677,7 +677,7 @@ ends in a grey `[...]` (`span.omit`), unless that hides less than 25% of
 it, and the client-side cell text folding is off. The
 fold controls of the omitted aspects leave the folding tab along with
 the implied ones (`diagram:2` also drops `level3`, no diagrams at all
-drop all twelve diagram controls, and everything omitted drops the tab,
+drop all thirteen diagram controls, and everything omitted drops the tab,
 the tabs below moving up). The few extra style rules and the two script
 variations are emitted under the option only, so an export without it
 stays byte-identical. The rendering options `realtime` and `omit` travel
