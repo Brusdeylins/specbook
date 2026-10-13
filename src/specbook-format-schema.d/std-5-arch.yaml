@@ -380,6 +380,7 @@
             nest:
                 properties:
                     -   PART-OF
+                    -   LAYER
             shapes:
                 -   property: KIND
                     value: Datastore
