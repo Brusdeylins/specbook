@@ -546,6 +546,33 @@ const indirectTraces = (ctx: DiagramContext, rows: SpecObject[], columns: Set<Sp
     return indirect
 }
 
+/*  name the edges after the objects connecting their ends (e.g. the
+    interface the source consumes and the target provides), by the
+    configured property values of those objects joined with " / " (or
+    by their names), several connecting objects joined with ", ", while
+    an edge without any connecting object keeps its name  */
+const labelEdges = (ctx: DiagramContext, labels: NonNullable<SchemaDiagram["edgeLabels"]>,
+    edges: DiagramEdge[]): DiagramEdge[] => {
+    const refsOf = (object: SpecObject, key: string): SpecObject[] => {
+        const value = propValue(ctx.parenProps, object, key)
+        return value === undefined ? [] : Array.from(plainText(value).matchAll(referenceRegex), (m) =>
+            resolveUnique(ctx.index, m[1].trim(), object).target)
+            .filter((target): target is SpecObject => target !== undefined)
+    }
+    const labelOf = (object: SpecObject): string => {
+        const values = (labels.properties ?? []).flatMap((key) => {
+            const value = propValue(ctx.parenProps, object, key)
+            return value !== undefined ? [ plainText(value).replace(/`/g, "").trim() ] : []
+        })
+        return values.length > 0 ? values.join(" / ") : plainText(object.name)
+    }
+    return edges.map((edge) => {
+        const provided = new Set(refsOf(edge.target, labels.target))
+        const shared   = refsOf(edge.source, labels.source).filter((object) => provided.has(object))
+        return shared.length > 0 ? { ...edge, name: Array.from(new Set(shared.map(labelOf))).join(", ") } : edge
+    })
+}
+
 /*  deduplicate the edges (a containment, object, or center edge can
     coincide with a reference edge, and several edge objects can
     describe the very same edge)  */
@@ -941,6 +968,8 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         can coincide with a reference edge of a node onto it  */
     if (type === "hub" && diagram.centerEdges !== undefined)
         edges.push(...deriveCenterEdges(ctx, diagram.centerEdges, nodes, center, errors))
+    if (diagram.edgeLabels !== undefined)
+        edges = labelEdges(ctx, diagram.edgeLabels, edges)
     edges = dedupEdges(edges, anchors)
 
     /*  the indirect traces of a traceability matrix  */

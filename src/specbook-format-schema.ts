@@ -115,6 +115,18 @@ export type SchemaDiagramLayers = {
     value:             string
 }
 
+/*  the labels of the edges of a diagram through the connecting objects:
+    an edge is named after the objects which its source references
+    through the "source" property and its target through the "target"
+    property (e.g. the interface a component consumes and the other one
+    provides), by their "properties" values joined with " / " (by
+    default by their names)  */
+export type SchemaDiagramEdgeLabels = {
+    source:            string
+    target:            string
+    properties?:       string[]
+}
+
 /*  a rule drawing the nodes of a diagram with another outline: the
     nodes carrying the value (or a value matching the "/xxx/" regular
     expression) in the property get the shape  */
@@ -150,6 +162,7 @@ export type SchemaDiagram = {
     cells?:            SchemaDiagramCells
     layers?:           SchemaDiagramLayers
     shapes?:           SchemaDiagramShape[]
+    edgeLabels?:       SchemaDiagramEdgeLabels
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -255,6 +268,11 @@ const SchemaDiagramLayers: v.GenericSchema<SchemaDiagramLayers> = v.strictObject
     property:          v.string(),
     value:             v.string()
 })
+const SchemaDiagramEdgeLabels: v.GenericSchema<SchemaDiagramEdgeLabels> = v.strictObject({
+    source:            v.string(),
+    target:            v.string(),
+    properties:        v.optional(v.pipe(v.array(v.string()), v.minLength(1)))
+})
 const SchemaDiagramShape: v.GenericSchema<SchemaDiagramShape> = v.strictObject({
     property:          v.string(),
     value:             v.string(),
@@ -283,6 +301,7 @@ const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
     cells:             v.optional(SchemaDiagramCells),
     layers:            v.optional(SchemaDiagramLayers),
     shapes:            v.optional(v.pipe(v.array(SchemaDiagramShape), v.minLength(1))),
+    edgeLabels:        v.optional(SchemaDiagramEdgeLabels),
     properties:        v.optional(v.array(v.string())),
     config:            v.optional(SchemaDiagramConfig)
 })

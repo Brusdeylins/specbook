@@ -384,6 +384,12 @@
                 -   property: KIND
                     value: Datastore
                     shape: database
+            edgeLabels:
+                source: CONSUMES
+                target: PROVIDES
+                properties:
+                    -   KIND
+                    -   TRANSPORT
             properties:
                 -   KIND
         -   type: layer
@@ -396,6 +402,12 @@
                 -   property: KIND
                     value: Datastore
                     shape: database
+            edgeLabels:
+                source: CONSUMES
+                target: PROVIDES
+                properties:
+                    -   KIND
+                    -   TRANSPORT
             properties:
                 -   KIND
             config:
