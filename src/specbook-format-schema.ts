@@ -106,13 +106,13 @@ export type SchemaDiagramCells = {
     value?:            string
 }
 
-/*  the layers of a "layer" diagram: the reference-valued property
-    followed transitively from a node object to the object acting as
-    its layer, which is recognized by the value of one of its properties  */
+/*  the layers of a "layer" diagram: the objects acting as the layers,
+    and the reference-valued properties followed transitively from a
+    node object (and from a layer, for its groups) to its layer (at
+    every step the first property carrying a resolvable reference wins)  */
 export type SchemaDiagramLayers = {
-    via:               string
-    property:          string
-    value:             string
+    objects:           string
+    via:               string[]
 }
 
 /*  the labels of the edges of a diagram through the connecting objects:
@@ -167,6 +167,10 @@ export type SchemaDiagram = {
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
+
+/*  the diagram shape, i.e., the "type" of a diagram configuration
+    with its default applied  */
+export type SchemaDiagramType = NonNullable<SchemaDiagram["type"]>
 
 /*  the diagrams of an object kind: none, its single one, or its list  */
 export const diagramsOf = (object: SchemaObject | undefined): SchemaDiagram[] =>
@@ -265,9 +269,8 @@ const SchemaDiagramCells: v.GenericSchema<SchemaDiagramCells> = v.strictObject({
     value:             v.optional(v.string())
 })
 const SchemaDiagramLayers: v.GenericSchema<SchemaDiagramLayers> = v.strictObject({
-    via:               v.string(),
-    property:          v.string(),
-    value:             v.string()
+    objects:           v.string(),
+    via:               v.pipe(v.array(v.string()), v.minLength(1))
 })
 const SchemaDiagramEdgeLabels: v.GenericSchema<SchemaDiagramEdgeLabels> = v.strictObject({
     source:            v.string(),
@@ -331,8 +334,6 @@ const SchemaObject: v.GenericSchema<SchemaObject> = v.strictObject({
     props:             v.optional(v.array(SchemaProperty)),
     children:          v.optional(v.array(v.lazy(() => SchemaObject)))
 })
-export const Schema: v.GenericSchema<Schema> =
-    v.pipe(v.array(SchemaObject), v.minLength(1))
 const SchemaMixin: v.GenericSchema<SchemaMixin> = v.strictObject({
     mixin:             v.string(),
     desc:              v.optional(v.string()),
@@ -342,7 +343,7 @@ const SchemaMixin: v.GenericSchema<SchemaMixin> = v.strictObject({
 /*  the configured schema validates an entry carrying a "mixin" field as
     a mixin and every other one as an object kind, so the diagnostics of
     an object kind stay as precise as without any mixins  */
-export const isSchemaMixin = (entry: unknown): boolean =>
+export const isSchemaMixin = (entry: unknown): entry is SchemaMixin =>
     typeof entry === "object" && entry !== null && !Array.isArray(entry) && "mixin" in entry
 export const SchemaConfig: v.GenericSchema<SchemaConfig> =
     v.pipe(v.array(v.lazy((entry) => isSchemaMixin(entry) ? SchemaMixin : SchemaObject)), v.minLength(1))

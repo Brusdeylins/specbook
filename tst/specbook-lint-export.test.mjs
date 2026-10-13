@@ -167,8 +167,11 @@ test("omitting layout diagrams keeps the hub diagram", async () => {
     const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "json" ],
         omit: [ "diagram:layout" ] })
     const diagram = objectOf(JSON.parse(json.toString("utf8")), "TYPE", "RecordFrame").diagram
-    assert.equal(typeof diagram, "string")
-    assert.match(diagram, /^#type hub/)
+
+    /*  a kind configuring a diagram list keeps a list, however many
+        of its diagrams remain  */
+    assert.ok(Array.isArray(diagram) && diagram.length === 1)
+    assert.match(diagram[0], /^#type hub/)
 })
 
 test("HTML export renders both diagrams of a type and the layout fold control", async () => {
@@ -178,19 +181,19 @@ test("HTML export renders both diagrams of a type and the layout fold control", 
     assert.ok(text.includes("fold-layouts"))
 })
 
-test("the functionality view derives a layer diagram from the Layer components", async () => {
+test("the functionality view derives a layer diagram from the layers", async () => {
     const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir: fixture, formats: [ "json" ] })
     const diagrams = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram
     assert.ok(Array.isArray(diagrams) && diagrams.length === 3)
     const layer = diagrams[1]
     assert.match(layer, /^#type layer/)
 
-    /*  the Layer components become the bands, not nodes, and their
-        "PART-OF" references are the layering, not edges  */
-    assert.doesNotMatch(layer, /COMPONENT-access-layer:/)
+    /*  the layers become the bands, not nodes, and the "LAYER"
+        references are the layering, not edges  */
+    assert.doesNotMatch(layer, /LAYER-access-layer:/)
     assert.match(layer, /COMPONENT-gateway: Gateway \[ [^\]]*layer: "Access Layer"/)
     assert.match(layer, /COMPONENT-ingest: Ingest \[ [^\]]*layer: "Core Layer"/)
-    assert.doesNotMatch(layer, /part-of|-layer\n/)
+    assert.doesNotMatch(layer, /--\(layer\)|-layer\n/)
     assert.match(layer, /COMPONENT-ingest --> ARCH-FV\.COMPONENT-gateway/)
 })
 
@@ -203,11 +206,10 @@ test("a layer diagram marks the upward dependency in the HTML export", async () 
 })
 
 test("a functionality view without layers omits the layer diagram", async () => {
-    const basedir = variant("25-ARCH-FV-Functionality-View.md", "-   KIND: Layer\n\nThe layer facing",
-        "-   KIND: Subsystem\n\nThe layer facing")
+    const basedir = variant("25-ARCH-FV-Functionality-View.md", "-   LAYER:      [[LAYER:access-layer]]\n", "")
     const file = path.join(basedir, "25-ARCH-FV-Functionality-View.md")
     fs.writeFileSync(file, fs.readFileSync(file, "utf8")
-        .replace("-   KIND: Layer\n\nThe layer holding", "-   KIND: Subsystem\n\nThe layer holding"), "utf8")
+        .replace("-   LAYER:      [[LAYER:core-layer]]\n", ""), "utf8")
     const [ json ] = await new SpecBook().export({ config: [ "std" ], basedir, formats: [ "json" ] })
     const diagrams = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram
     assert.deepEqual(diagrams.map((spec) => spec.split("\n")[0]), [ "#type graph", "#type matrix" ])
@@ -218,9 +220,9 @@ test("the functionality view derives a dependency matrix of the DEPENDS-ON refer
     const matrix = objectOf(JSON.parse(json.toString("utf8")), "ARCH", "Functionality View").diagram[2]
     assert.match(matrix, /^#type matrix/)
 
-    /*  only the components carrying a dependency remain (the layers
-        drop out), and the "PART-OF" references derive no edges  */
-    assert.doesNotMatch(matrix, /COMPONENT-access-layer:|COMPONENT-core-layer:/)
+    /*  only the components remain, and the "LAYER" references
+        derive no edges  */
+    assert.doesNotMatch(matrix, /LAYER-access-layer:|LAYER-core-layer:/)
     assert.match(matrix, /COMPONENT-gateway --> ARCH-FV\.COMPONENT-ingest/)
     assert.match(matrix, /COMPONENT-ingest --> ARCH-FV\.COMPONENT-gateway/)
     assert.doesNotMatch(matrix, /-layer\n/)
@@ -257,7 +259,10 @@ test("the layers of the sample nest into groups and the datastore is drawn as a 
     assert.match(layer, /COMPONENT-relay: Relay \[ [^\]]*layer: "Relay Layer", layer-group: "Server Layers\/Broker Layers"/)
     assert.match(layer, /COMPONENT-database: Database \[ [^\]]*layer: "Database Layer", layer-group: "Server Layers", shape: database/)
     assert.match(layer, /COMPONENT-auth: "Authentication Service" \[ [^\]]*layer: "Service Layer"/)
-    assert.doesNotMatch(layer, /COMPONENT-server-layers:/)
+    assert.doesNotMatch(layer, /LAYER-server-layers:/)
+
+    /*  the orchestrator depends on the relay, so it is connected  */
+    assert.match(layer, /COMPONENT-junction --> ARCH-FV\.COMPONENT-relay/)
 
     /*  the dependency through a consumed and provided interface is
         named after the kind and the transport of that interface  */

@@ -9,7 +9,7 @@ import { Gradia }
 
 import type { Spec, SpecObject, SpecProperty }
     from "./specbook-format-spec.js"
-import { diagramsOf, type Schema, type SchemaDiagram, type SchemaDiagramCenterEdges,
+import { diagramsOf, type Schema, type SchemaDiagram, type SchemaDiagramType, type SchemaDiagramCenterEdges,
     type SchemaDiagramNest, type SchemaDiagramCells, type SchemaDiagramLayers }
     from "./specbook-format-schema.js"
 import { referenceRegex, buildLinkIndex, resolveUnique, resolveSet, anchorPaths,
@@ -17,6 +17,8 @@ import { referenceRegex, buildLinkIndex, resolveUnique, resolveSet, anchorPaths,
     from "./specbook-link.js"
 import type { ParseContext }
     from "./specbook-parse-common.js"
+import { anchored }
+    from "./specbook-parse-value.js"
 import { collectSchemas, collectParenProps }
     from "./specbook-parse-semantic.js"
 import type { OmitAspect }
@@ -85,7 +87,7 @@ const diagramPresets: NonNullable<SchemaDiagram["config"]> = {
 
 /*  the diagram shape, i.e., the "type" of a diagram configuration
     with its default applied  */
-export type DiagramType = NonNullable<SchemaDiagram["type"]>
+export type DiagramType = SchemaDiagramType
 
 /*  the cell span of a node object of a "layout" diagram, in bits: its
     offset (a byte offset with an optional ".<bit>" position, decimal or
@@ -114,43 +116,79 @@ const cellSpanOf = (parenProps: ParenProps, object: SpecObject, cells: SchemaDia
     }
 }
 
-/*  whether an object acts as a layer of a "layer" diagram, i.e.
-    carries the configured value in the configured property  */
-const isLayer = (parenProps: ParenProps, object: SpecObject, layers: SchemaDiagramLayers): boolean =>
-    plainText(propValue(parenProps, object, layers.property) ?? "").trim() === layers.value
+/*  the layering of a "layer" diagram: the layer of every layered node
+    and the nested groups of every such layer, outermost first  */
+interface Layering {
+    layerOf:  Map<SpecObject, SpecObject>
+    groupsOf: Map<SpecObject, SpecObject[]>
+}
 
-/*  the layer of a node object of a "layer" diagram: the first object
-    reached from it through the references of the "via" property
-    (followed transitively, a cycle ending the search) which acts as a
-    layer, e.g. the layer a module belongs to through its subsystem  */
-const layerOf = (ctx: DiagramContext, node: SpecObject, layers: SchemaDiagramLayers): SpecObject | undefined => {
-    const seen = new Set<SpecObject>()
-    let cur: SpecObject | undefined = node
-    while (cur !== undefined && !seen.has(cur)) {
-        seen.add(cur)
-        if (cur !== node && isLayer(ctx.parenProps, cur, layers))
-            return cur
-        const value: string | undefined = propValue(ctx.parenProps, cur, layers.via)
-        const m: RegExpExecArray | null = value !== undefined ? referenceOnce.exec(plainText(value)) : null
-        cur = m !== null ? resolveUnique(ctx.index, m[1].trim(), cur).target : undefined
+/*  the object an object references through the first of the "via"
+    properties carrying a resolvable reference (its first one)  */
+const followVia = (ctx: DiagramContext, object: SpecObject, via: string[]): SpecObject | undefined => {
+    for (const key of via) {
+        const value = propValue(ctx.parenProps, object, key)
+        const m     = value !== undefined ? referenceOnce.exec(plainText(value)) : null
+        const next  = m !== null ? resolveUnique(ctx.index, m[1].trim(), object).target : undefined
+        if (next !== undefined)
+            return next
     }
     return undefined
 }
 
-/*  the nested groups of a layer of a "layer" diagram: the layers
-    reached from it through the references of the "via" property,
-    outermost first (e.g. a "Broker" group within a "Server" group)  */
-const layerGroupsOf = (ctx: DiagramContext, layer: SpecObject, layers: SchemaDiagramLayers): SpecObject[] => {
-    const groups = new Array<SpecObject>()
-    for (let group = layerOf(ctx, layer, layers); group !== undefined && !groups.includes(group);
-        group = layerOf(ctx, group, layers))
-        groups.unshift(group)
-    return groups
+/*  the layer an object reaches through the "via" properties (followed
+    transitively, a cycle ending the search), e.g. the layer a module
+    belongs to through its component, or the group a layer belongs to  */
+const reachLayer = (ctx: DiagramContext, object: SpecObject, via: string[],
+    layers: Set<SpecObject>): SpecObject | undefined => {
+    const seen = new Set<SpecObject>([ object ])
+    for (let cur = followVia(ctx, object, via); cur !== undefined && !seen.has(cur); cur = followVia(ctx, cur, via)) {
+        if (layers.has(cur))
+            return cur
+        seen.add(cur)
+    }
+    return undefined
+}
+
+/*  derive the layering of a "layer" diagram: the layer objects drop out
+    of the nodes (they become the bands), every other node is assigned
+    the layer it reaches, and the nodes are ordered by their layers (in
+    the document order of the layer objects), so the bands stack
+    top-down in that order, while a diagram without any layered node is
+    emptied, as it would show no layering at all  */
+const deriveLayering = (ctx: DiagramContext, nodes: SpecObject[], layers: SchemaDiagramLayers,
+    errors: DiagramError[]): { nodes: SpecObject[], layering: Layering } => {
+    const layerSet = new Set(resolvePatterns(ctx.index, errors, layers.objects, "layers.objects"))
+    const layering: Layering = { layerOf: new Map(), groupsOf: new Map() }
+    nodes = nodes.filter((node) => !layerSet.has(node))
+    for (const node of nodes) {
+        const layer = reachLayer(ctx, node, layers.via, layerSet)
+        if (layer === undefined)
+            continue
+        layering.layerOf.set(node, layer)
+        if (!layering.groupsOf.has(layer)) {
+            const groups = new Array<SpecObject>()
+            let group = reachLayer(ctx, layer, layers.via, layerSet)
+            while (group !== undefined && !groups.includes(group)) {
+                groups.unshift(group)
+                group = reachLayer(ctx, group, layers.via, layerSet)
+            }
+            layering.groupsOf.set(layer, groups)
+        }
+    }
+    if (layering.layerOf.size === 0)
+        return { nodes: [], layering }
+    const rank = (node: SpecObject) => {
+        const layer = layering.layerOf.get(node)
+        return layer !== undefined ? ctx.positions.get(layer) ?? 0 : Number.MAX_SAFE_INTEGER
+    }
+    const position = (node: SpecObject) => ctx.positions.get(node) ?? 0
+    return { nodes: nodes.toSorted((a, b) => rank(a) - rank(b) || position(a) - position(b)), layering }
 }
 
 /*  the shape of a node of a diagram: the one of the first shape rule
     whose property carries its value (or a value matching its "/xxx/"
-    regular expression), if any  */
+    regular expression, validated by the schema configuration), if any  */
 const shapeOfNode = (ctx: DiagramContext, diagram: SchemaDiagram, node: SpecObject): string | undefined =>
     diagram.shapes?.find((rule) => {
         const value = propValue(ctx.parenProps, node, rule.property)
@@ -158,22 +196,19 @@ const shapeOfNode = (ctx: DiagramContext, diagram: SchemaDiagram, node: SpecObje
             return false
         const text = plainText(value).trim()
         const m    = /^\/(.*)\/$/.exec(rule.value)
-        return m !== null ? new RegExp(`^(?:${m[1]})$`).test(text) : text === rule.value
+        return m !== null ? anchored(m[1]).test(text) : text === rule.value
     })?.shape
 
 /*  the Gradia rendering options of a diagram: the presets, for a
     "layout" diagram the cell granularity its nodes demand (bit cells,
     32 per row, as soon as a node is not byte-aligned, byte cells, 16
     per row, otherwise), and finally the configured ones  */
-const diagramConfig = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType,
-    nodes: SpecObject[]): NonNullable<SchemaDiagram["config"]> => {
-    const cells = diagram.cells
-    if (type !== "layout" || cells === undefined)
+const diagramConfig = (diagram: SchemaDiagram, type: DiagramType,
+    spans: Map<SpecObject, CellSpan>): NonNullable<SchemaDiagram["config"]> => {
+    if (type !== "layout")
         return { ...diagramPresets, ...diagram.config }
-    const bitwise = nodes.some((node) => {
-        const span = cellSpanOf(ctx.parenProps, node, cells)
-        return span !== undefined && (span.offset % 8 !== 0 || (span.size !== "variable" && span.size % 8 !== 0))
-    })
+    const bitwise = Array.from(spans.values()).some((span) =>
+        span.offset % 8 !== 0 || (span.size !== "variable" && span.size % 8 !== 0))
     return { ...diagramPresets, "layout-cell-bits": bitwise ? 1 : 8, "layout-row-cells": bitwise ? 32 : 16,
         ...diagram.config }
 }
@@ -247,17 +282,34 @@ interface DiagramNesting {
     containers: Set<SpecObject>
 }
 
+/*  a derived diagram, ready for its spec generation: its type, its
+    (possibly synthetic) center, its nodes and edges, the nesting of the
+    nodes, the Gradia rendering options, the cell spans of a "layout"
+    diagram, the layering of a "layer" diagram, and the columns and the
+    indirectly traced objects of a traceability "matrix" diagram  */
+interface DerivedDiagram {
+    type:       DiagramType
+    center:     SpecObject
+    centerUrl?: string
+    nodes:      SpecObject[]
+    edges:      DiagramEdge[]
+    nesting:    DiagramNesting
+    config:     NonNullable<SchemaDiagram["config"]>
+    spans:      Map<SpecObject, CellSpan>
+    layering:   Layering
+    columns:    Set<SpecObject>
+    indirect:   Set<SpecObject>
+}
+
 /*  generate the Gradia spec text of a derived diagram, opened by a
     "#type" directive and the configured "#config" directives so every
     embedded spec is self-contained: one node statement per object (the
     unique anchor path as the node id, the object name as the displayed
     label, the container node as the parent) and one edge statement per
     derived edge  */
-const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType, center: SpecObject,
-    centerUrl: string | undefined, nodes: SpecObject[], edges: DiagramEdge[], nesting: DiagramNesting,
-    config: NonNullable<SchemaDiagram["config"]>, layers: Map<SpecObject, SpecObject>,
-    columns: Set<SpecObject>, indirect: Set<SpecObject>): string => {
+const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, derived: DerivedDiagram): string => {
     const { index, anchors, positions, parenProps } = ctx
+    const { type, center, centerUrl, nodes, edges, nesting, config, spans, layering, columns, indirect } = derived
     const lines  = [ `#type ${type}` ]
     for (const [ key, value ] of Object.entries(config))
         if (value !== undefined)
@@ -307,10 +359,10 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
 
         /*  the layer of a "layer" node, by the name of its layer object,
             and the path of the groups of the layer  */
-        const layer = layers.get(node)
+        const layer = layering.layerOf.get(node)
         if (layer !== undefined) {
             attrs.push(`layer: ${atom(plainText(layer.name))}`)
-            const groups = diagram.layers !== undefined ? layerGroupsOf(ctx, layer, diagram.layers) : []
+            const groups = layering.groupsOf.get(layer) ?? []
             if (groups.length > 0)
                 attrs.push(`layer-group: ${atom(groups.map((group) =>
                     plainText(group.name).replace(/\//g, "-")).join("/"))}`)
@@ -323,8 +375,7 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
 
         /*  the cell span of a "layout" node, in cells of the configured
             granularity (a variable size spanning the rest of its row)  */
-        const span = type === "layout" && diagram.cells !== undefined ?
-            cellSpanOf(parenProps, node, diagram.cells) : undefined
+        const span = spans.get(node)
         if (span !== undefined) {
             const bits = Number(config["layout-cell-bits"] ?? 8) || 8
             attrs.push(`offset: ${Math.floor(span.offset / bits)}`)
@@ -368,10 +419,11 @@ const renderSpec = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramTy
     target lifted to its nearest node  */
 const deriveReferenceEdges = (ctx: DiagramContext, diagram: SchemaDiagram, nodes: SpecObject[],
     nodeSet: Set<SpecObject>): DiagramEdge[] => {
-    /*  the property assigning the layers of a "layer" diagram is the
-        layering itself and hence no edge, and a "linkProps" list limits
-        the edges to the references of the listed properties  */
-    const skip = diagram.type === "layer" ? diagram.layers?.via : undefined
+    /*  the properties assigning the layers of a "layer" diagram are the
+        layering itself and hence no edges, and a "linkProps" list limits
+        the edges to the references of the listed properties (and hence
+        excludes the ones of the description texts)  */
+    const skip = new Set(diagram.type === "layer" ? diagram.layers?.via ?? [] : [])
     const only = diagram.linkProps !== undefined ? new Set(diagram.linkProps) : undefined
     const { index, anchors, parents, parenProps } = ctx
     const edges = new Array<DiagramEdge>()
@@ -400,12 +452,12 @@ const deriveReferenceEdges = (ctx: DiagramContext, diagram: SchemaDiagram, nodes
         const counts = new Map<string, { target: SpecObject, name?: string, count: number }>()
         for (const object of objects) {
             const texts: { text: string, name?: string }[] = propsOf(parenProps, object)
-                .filter((property) => property.key !== skip && (only?.has(property.key) ?? true))
+                .filter((property) => !skip.has(property.key) && (only?.has(property.key) ?? true))
                 .map((property) => ({
                     text: property.value,
                     name: diagram.labeled === true ? property.key.toLowerCase() : undefined
                 }))
-            if (diagram.links === "all" && object.description !== undefined) {
+            if (diagram.links === "all" && only === undefined && object.description !== undefined) {
                 texts.push({ text: object.description.description })
                 if (object.description.rationale !== undefined)
                     texts.push({ text: object.description.rationale })
@@ -476,7 +528,8 @@ const deriveObjectEdges = (ctx: DiagramContext, diagram: SchemaDiagram, nodeSet:
 /*  derive the edges of a diagram: the reference edges of the node
     objects, the object edges of the edge objects, and the containment
     edges of the object hierarchy (a "grid" and a "layout" diagram are
-    edge-less by definition, so no edges are derived at all)  */
+    edge-less by definition, so no edges are derived at all, while the
+    schema configuration rejects their edge options)  */
 const deriveEdges = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramType,
     nodes: SpecObject[], nodeSet: Set<SpecObject>, edgeObjects: SpecObject[],
     errors: DiagramError[]): DiagramEdge[] => {
@@ -494,31 +547,34 @@ const deriveEdges = (ctx: DiagramContext, diagram: SchemaDiagram, type: DiagramT
                     edges.push({ source: parent, target: node })
             }
     }
-    else {
-        for (const field of [ "edges", "hierarchy", "deep", "labeled", "onlyConnected" ] as const)
-            if (diagram[field] !== undefined && diagram[field] !== false)
-                errors.push({ reason: `"${type}" diagram cannot carry ` +
-                    `${(/^[aeiou]/).test(field) ? "an" : "a"} "${field}" configuration` })
-    }
     return edges
 }
 
 /*  the objects of a traceability matrix related to its other side
-    indirectly only: a row or column object without a direct trace which
-    reaches an object of the other side through the references of its
-    properties via exactly one intermediate object (e.g. a test case
-    verifying a rule which constrains a requirement), where a reached
-    object is lifted to its nearest ancestor-or-self of the other side,
-    and the reached object of the other side counts as indirectly
-    related, too  */
+    indirectly only: a row or column object without a direct trace onto
+    the other side which reaches an object of the other side through the
+    references of its properties via exactly one intermediate object
+    (e.g. a test case verifying a rule which constrains a requirement),
+    where a reached object is lifted to its nearest ancestor-or-self of
+    the other side, and the reached object of the other side counts as
+    indirectly related, too  */
 const indirectTraces = (ctx: DiagramContext, rows: SpecObject[], columns: Set<SpecObject>,
     edges: DiagramEdge[]): Set<SpecObject> => {
-    const direct = new Set<SpecObject>(edges.flatMap((edge) => [ edge.source, edge.target ]))
-    const refsOf = (object: SpecObject): SpecObject[] =>
-        propsOf(ctx.parenProps, object).flatMap((property) =>
-            Array.from(plainText(property.value).matchAll(referenceRegex), (m) =>
-                resolveUnique(ctx.index, m[1].trim(), object).target)
-                .filter((target): target is SpecObject => target !== undefined))
+    const direct = new Set<SpecObject>(edges
+        .filter((edge) => columns.has(edge.source) !== columns.has(edge.target))
+        .flatMap((edge) => [ edge.source, edge.target ]))
+    const refs   = new Map<SpecObject, SpecObject[]>()
+    const refsOf = (object: SpecObject): SpecObject[] => {
+        let targets = refs.get(object)
+        if (targets === undefined) {
+            targets = propsOf(ctx.parenProps, object).flatMap((property) =>
+                Array.from(plainText(property.value).matchAll(referenceRegex), (m) =>
+                    resolveUnique(ctx.index, m[1].trim(), object).target)
+                    .filter((target): target is SpecObject => target !== undefined))
+            refs.set(object, targets)
+        }
+        return targets
+    }
     const liftInto = (object: SpecObject, set: Set<SpecObject>): SpecObject | undefined => {
         let cur: SpecObject | undefined = object
         while (cur !== undefined && !set.has(cur))
@@ -576,8 +632,9 @@ const labelEdges = (ctx: DiagramContext, labels: NonNullable<SchemaDiagram["edge
 /*  turn the edges of a "sequence" diagram into its messages between
     lifelines: every edge end is mapped onto its lifeline, i.e. onto the
     object referenced by the "lifelines" property of the end object (its
-    first reference), onto a synthetic lifeline named after its plain
-    value (e.g. "System"), or onto the end object itself, while the
+    first reference), onto a synthetic lifeline named after the first
+    comma-separated item of its plain value (e.g. "System"), or onto the
+    end object itself, while the
     lifelines become the nodes in the order of their first appearance  */
 const deriveLifelines = (ctx: DiagramContext, property: string | undefined,
     edges: DiagramEdge[]): { nodes: SpecObject[], edges: DiagramEdge[] } => {
@@ -588,10 +645,11 @@ const deriveLifelines = (ctx: DiagramContext, property: string | undefined,
         const value = propValue(ctx.parenProps, object, property)
         if (value === undefined)
             return object
-        const m = referenceOnce.exec(value)
+        const text = plainText(value)
+        const m    = referenceOnce.exec(text)
         if (m !== null)
             return resolveUnique(ctx.index, m[1].trim(), object).target ?? object
-        const name = plainText(value).split(",")[0].trim()
+        const name = text.split(",")[0].trim()
         let lifeline = synthetic.get(name)
         if (lifeline === undefined) {
             lifeline = { kind: "", id: `@lifeline-${name}`, name, properties: [], children: [] }
@@ -916,51 +974,28 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
     const errors = new Array<DiagramError>()
 
     /*  determine the node objects and the edge objects (default: none),
-        with the edge objects never acting as nodes themselves  */
+        with the edge objects never acting as nodes themselves (the
+        schema configuration already ensured that every option suits
+        the diagram type)  */
     let nodes = deriveNodes(index, object, diagram, errors)
 
     /*  a "layout" diagram consists of the node objects carrying a valid
         cell span only (e.g. the fields of a binary format), so the
         object itself and its remaining descendants drop out  */
-    const cells = diagram.cells
-    if (type === "layout") {
-        if (cells === undefined)
-            errors.push({ reason: "\"layout\" diagram requires a \"cells\" configuration" })
-        else
-            nodes = nodes.filter((node) => cellSpanOf(ctx.parenProps, node, cells) !== undefined)
-    }
-    else if (cells !== undefined)
-        errors.push({ reason: `"${type}" diagram cannot carry a "cells" configuration` })
-
-    /*  a "layer" diagram turns the objects acting as layers into its
-        bands, assigns every other node to the layer it reaches, and
-        orders the nodes by their layers (in the document order of the
-        layer objects), so the bands stack top-down in that order, while
-        a diagram without any layered node is omitted, as it would show
-        no layering at all  */
-    const layerMap = new Map<SpecObject, SpecObject>()
-    const layers   = diagram.layers
-    if (type === "layer") {
-        if (layers === undefined)
-            errors.push({ reason: "\"layer\" diagram requires a \"layers\" configuration" })
-        else {
-            nodes = nodes.filter((node) => !isLayer(ctx.parenProps, node, layers))
-            for (const node of nodes) {
-                const layer = layerOf(ctx, node, layers)
-                if (layer !== undefined)
-                    layerMap.set(node, layer)
-            }
-            if (layerMap.size === 0)
-                nodes = []
-            const rank = (node: SpecObject) => {
-                const layer = layerMap.get(node)
-                return layer !== undefined ? ctx.positions.get(layer) ?? 0 : Number.MAX_SAFE_INTEGER
-            }
-            nodes = nodes.toSorted((a, b) => rank(a) - rank(b) || (ctx.positions.get(a) ?? 0) - (ctx.positions.get(b) ?? 0))
+    const spans = new Map<SpecObject, CellSpan>()
+    if (type === "layout" && diagram.cells !== undefined) {
+        for (const node of nodes) {
+            const span = cellSpanOf(ctx.parenProps, node, diagram.cells)
+            if (span !== undefined)
+                spans.set(node, span)
         }
+        nodes = nodes.filter((node) => spans.has(node))
     }
-    else if (layers !== undefined)
-        errors.push({ reason: `"${type}" diagram cannot carry a "layers" configuration` })
+
+    /*  a "layer" diagram turns the layer objects into its bands  */
+    let layering: Layering = { layerOf: new Map(), groupsOf: new Map() }
+    if (type === "layer" && diagram.layers !== undefined)
+        ({ nodes, layering } = deriveLayering(ctx, nodes, diagram.layers, errors))
 
     /*  a "matrix" diagram with "columns" is a traceability matrix: the
         objects matching them are its columns (dropping out of its rows),
@@ -968,14 +1003,10 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         as a trace may be recorded on either side  */
     const columnSet = new Set<SpecObject>()
     if (diagram.columns !== undefined) {
-        if (type !== "matrix")
-            errors.push({ reason: `"${type}" diagram cannot carry a "columns" configuration` })
-        else {
-            const columns = resolvePatterns(index, errors, diagram.columns, "columns")
-            for (const column of columns)
-                columnSet.add(column)
-            nodes = [ ...nodes.filter((node) => !columnSet.has(node)), ...columns ]
-        }
+        const columns = resolvePatterns(index, errors, diagram.columns, "columns")
+        for (const column of columns)
+            columnSet.add(column)
+        nodes = [ ...nodes.filter((node) => !columnSet.has(node)), ...columns ]
     }
     const edgeObjects = diagram.edges !== undefined ? resolvePatterns(index, errors, diagram.edges, "edges") : []
     const edgeSet     = new Set<SpecObject>(edgeObjects)
@@ -987,12 +1018,6 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
 
     /*  determine the center of a "hub" diagram (the only shape
         carrying a center at all)  */
-    if (type !== "hub") {
-        if (diagram.center !== undefined)
-            errors.push({ reason: `"${type}" diagram cannot carry a "center" configuration` })
-        if (diagram.centerEdges !== undefined)
-            errors.push({ reason: `"${type}" diagram cannot carry a "centerEdges" configuration` })
-    }
     const derived: DiagramCenter | undefined = type === "hub" ?
         deriveCenter(ctx, object, diagram, nodes, nodeSet, errors) : { center: object }
     if (derived === undefined)
@@ -1012,11 +1037,8 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         lifelines, which keep their order and may repeat  */
     if (type === "sequence")
         ({ nodes, edges } = deriveLifelines(ctx, diagram.lifelines, edges))
-    else {
-        if (diagram.lifelines !== undefined)
-            errors.push({ reason: `"${type}" diagram cannot carry a "lifelines" configuration` })
+    else
         edges = dedupEdges(edges, anchors)
-    }
 
     /*  the indirect traces of a traceability matrix  */
     const indirect = columnSet.size > 0 ?
@@ -1032,27 +1054,22 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
             ({ nodes, edges, columns } = projectHub(nodes, edges, center))
     }
 
-    /*  nest the nodes into container nodes (except in a "hub" diagram,
-        where every container would need a primary node of its own),
-        dropping the edges between a container and its own members,
-        which Gradia rejects, as the nesting already shows them  */
+    /*  nest the nodes into container nodes (in a "graph" or "grid"
+        diagram only), dropping the edges between a container and its
+        own members, which Gradia rejects, as the nesting already shows
+        them  */
     let nesting: DiagramNesting = { parentOf: new Map(), containers: new Set() }
     if (diagram.nest !== undefined) {
-        if (type === "hub" || type === "layout" || type === "layer" || type === "matrix" || type === "sequence")
-            errors.push({ reason: `"${type}" diagram cannot carry a "nest" configuration` })
-        else {
-            nesting = deriveNesting(ctx, diagram.nest, nodes, nodeSet, errors)
-            if (diagram.nest.crossing !== undefined && diagram.nest.crossing !== "nodes")
-                edges = liftEdges(edges, nesting.parentOf, diagram.nest.crossing, anchors)
-            edges = edges.filter((edge) => nesting.parentOf.get(edge.source) !== edge.target
-                && nesting.parentOf.get(edge.target) !== edge.source)
-        }
+        nesting = deriveNesting(ctx, diagram.nest, nodes, nodeSet, errors)
+        if (diagram.nest.crossing !== undefined && diagram.nest.crossing !== "nodes")
+            edges = liftEdges(edges, nesting.parentOf, diagram.nest.crossing, anchors)
+        edges = edges.filter((edge) => nesting.parentOf.get(edge.source) !== edge.target
+            && nesting.parentOf.get(edge.target) !== edge.source)
     }
 
     /*  the "onlyConnected" filtering keeps only the nodes with at
-        least one incident edge (sensible for "graph" and "matrix"
-        diagrams only), and the containers enclosing such a node  */
-    if (diagram.onlyConnected === true && (type === "graph" || type === "matrix")) {
+        least one incident edge, and the containers enclosing such a node  */
+    if (diagram.onlyConnected === true) {
         const connected = new Set<SpecObject>()
         for (const edge of edges) {
             connected.add(edge.source)
@@ -1075,9 +1092,10 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         || (diagram.collapse !== false && nodes.length === 1 && edges.length === 0))
         return { type, errors }
 
-    const config = diagramConfig(ctx, diagram, type, nodes)
-    return { type, spec: renderSpec(ctx, diagram, type, center, centerUrl, nodes, edges, nesting, config, layerMap, columnSet, indirect),
-        config, columns, errors }
+    const config = diagramConfig(diagram, type, spans)
+    const spec   = renderSpec(ctx, diagram, { type, center, centerUrl, nodes, edges, nesting,
+        config, spans, layering, columns: columnSet, indirect })
+    return { type, spec, config, columns, errors }
 }
 
 /*  the memoized diagram derivations, keyed by specification, as the

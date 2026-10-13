@@ -115,9 +115,8 @@ type SchemaDiagramCells = {
     value?:            string
 }
 type SchemaDiagramLayers = {
-    via:               string
-    property:          string
-    value:             string
+    objects:           string
+    via:               string[]
 }
 type SchemaDiagramEdgeLabels = {
     source:            string
@@ -292,8 +291,8 @@ type SchemaGradiaConfig = Partial<{
 -   `SchemaObject.mixins?: string[]`:
     names of the mixins whose properties the objects of this kind carry
     in addition to their own `props` (appended in mixin order, where an
-    own property of the same name takes precedence and refines the one
-    of the mixin), where an unknown name is an error,
+    own property of the same name replaces the one of the mixin as a
+    whole), where an unknown name is an error,
     BECAUSE a property group applies to many kinds and a kind may need
     to sharpen a single property of it
 
@@ -318,7 +317,8 @@ type SchemaGradiaConfig = Partial<{
 
 -   `SchemaObject.diagram?: SchemaDiagram | SchemaDiagram[]`:
     diagram, or list of diagrams (of distinct types, by which a later
-    configuration file merges into them), generated for every object of
+    configuration file merges into them, a single diagram merging like a
+    list of just it), generated for every object of
     this kind, the several ones rendered one below the other (left out
     when the configuration is emitted compressed by level 2 or higher),
     BECAUSE relations buried in references are graspable only when drawn,
@@ -372,15 +372,19 @@ type SchemaGradiaConfig = Partial<{
     skipped without any final node)
 
 -   `SchemaDiagram`:
-    diagram derived for every object of an object kind,
-    BECAUSE the relations of a specification are graspable only when drawn
+    diagram derived for every object of an object kind, where a property
+    named by `cells`, `layers`, `lifelines`, `linkProps`, `shapes`, or
+    `edgeLabels` has to be a property of some object kind,
+    BECAUSE the relations of a specification are graspable only when
+    drawn, and a mistyped property name would silently empty the diagram
 
 -   `SchemaDiagram.type?: "graph" | "hub" | ... | "sequence"`:
     diagram shape: `graph` (free), `hub` (centered), `grid` (edge-less),
     `layout` (the cells of a binary structure, edge-less), `layer`
     (stacked layers, marking the edges against the layering), `matrix`
     (a dependency structure matrix, outlining the cycles), `sequence`
-    (the ordered messages between lifelines),
+    (the ordered messages between lifelines), where an option not
+    suiting the shape is an error of the schema configuration,
     BECAUSE one object set tells different stories as different shapes
 
 -   `SchemaDiagram.nodes?: string`:
@@ -390,7 +394,8 @@ type SchemaGradiaConfig = Partial<{
 -   `SchemaDiagram.columns?: string`:
     comma-separated `[[xxx]]` patterns of the objects forming the columns
     of a `matrix` (allowed for that type only), turning it into a
-    traceability matrix of the `nodes` as rows against these columns,
+    traceability matrix of the `nodes` as rows against these columns
+    (which cannot carry `onlyConnected`, as that would drop its gaps),
     BECAUSE a trace between two different kinds (e.g. requirements and
     the test cases verifying them) reveals its gaps as empty lines
 
@@ -424,7 +429,8 @@ type SchemaGradiaConfig = Partial<{
     BECAUSE prose references are incidental and need an opt-in
 
 -   `SchemaDiagram.linkProps?: string[]`:
-    names of the properties whose references derive edges (default: all),
+    names of the properties whose references derive edges (default: all,
+    and with `links: all` the texts, too, which a list excludes),
     BECAUSE not every reference is a dependency (e.g. a `PART-OF`
     containment beside a `DEPENDS-ON` dependency)
 
@@ -517,21 +523,28 @@ type SchemaGradiaConfig = Partial<{
     `bit`, in bits, or `variable` (drawn up to the end of its row),
     BECAUSE a field spans as many cells as it occupies
 
+-   `SchemaDiagramCells.value?: string`:
+    property carrying the fixed value of a node, shown inside its cells,
+    BECAUSE a magic number or a reserved bit pattern is part of the structure
+
 -   `SchemaDiagram.layers?: SchemaDiagramLayers`:
     assignment of the node objects of a `layer` diagram to their layers
     (required by and allowed for that type only),
     BECAUSE a layering is a containment no reference of the nodes
     states directly
 
--   `SchemaDiagramLayers.via: string`:
-    reference-valued property followed transitively from a node to its
-    layer (e.g. `PART-OF`), whose references then derive no edges,
-    BECAUSE a node often sits in its layer only through a subsystem
-
--   `SchemaDiagramLayers.property: string`, `SchemaDiagramLayers.value: string`:
-    property and value marking an object as a layer (e.g. `KIND` and
-    `Layer`), which then becomes a band instead of a node,
+-   `SchemaDiagramLayers.objects: string`:
+    comma-separated `[[xxx]]` patterns of the objects acting as the
+    layers (in document order, top-down), which become bands instead of
+    nodes, a layer reaching another layer through `via` being grouped
+    into it,
     BECAUSE the layers are ordinary objects of the specification
+
+-   `SchemaDiagramLayers.via: string[]`:
+    reference-valued properties followed transitively from a node to its
+    layer (at every step the first one carrying a resolvable reference,
+    e.g. `LAYER` before `PART-OF`), whose references then derive no edges,
+    BECAUSE a node often sits in its layer only through a subsystem
 
 -   `SchemaDiagram.shapes?: SchemaDiagramShape[]`:
     rules drawing the nodes with another outline: the first rule whose
@@ -542,6 +555,15 @@ type SchemaGradiaConfig = Partial<{
     BECAUSE a datastore, an external service, or a pool of instances is
     recognized at a glance by its familiar symbol
 
+-   `SchemaDiagramShape.property: string`, `SchemaDiagramShape.value: string`:
+    property and its value (or `/xxx/` pattern, validated with the
+    schema configuration) selecting the nodes of a rule,
+    BECAUSE the outline follows what the object is, e.g. its `KIND`
+
+-   `SchemaDiagramShape.shape: "box" | ... | "device"`:
+    outline the selected nodes are drawn with,
+    BECAUSE the familiar symbols are a fixed vocabulary
+
 -   `SchemaDiagram.edgeLabels?: SchemaDiagramEdgeLabels`:
     naming of every edge after the objects connecting its ends: the ones
     its source references through the `source` property and its target
@@ -551,17 +573,23 @@ type SchemaGradiaConfig = Partial<{
     connecting object keeping its name,
     BECAUSE a dependency reads best by the protocol it is exercised over
 
+-   `SchemaDiagramEdgeLabels.source: string`, `SchemaDiagramEdgeLabels.target: string`:
+    reference-valued properties of the source and of the target node
+    whose shared referenced objects connect an edge,
+    BECAUSE the connecting object is referenced from both ends
+
+-   `SchemaDiagramEdgeLabels.properties?: string[]`:
+    properties of the connecting objects forming the label,
+    BECAUSE a protocol or a transport names a connection more precisely
+    than the name of its interface
+
 -   `SchemaDiagram.lifelines?: string`:
     property mapping an edge end of a `sequence` diagram onto its
     lifeline: the object it references first, or a synthetic lifeline
-    named after its plain value (e.g. `System`), the end object itself
-    without it,
+    named after the first comma-separated item of its plain value (e.g.
+    `System`), the end object itself without it,
     BECAUSE a message passes between the actors of the steps it connects,
     not between the steps themselves
-
--   `SchemaDiagramCells.value?: string`:
-    property carrying the fixed value of a node, shown inside its cells,
-    BECAUSE a magic number or a reserved bit pattern is part of the structure
 
 -   `SchemaDiagram.properties?: string[]`:
     property names attached to the nodes as key/value annotations,
@@ -785,18 +813,19 @@ the Gradia options `layout-cell-bits` and `layout-row-cells` of the
 `config` override, while the offset of every row is shown beside it.
 A `layout` accepts neither a `center` nor a `nest`.
 
-A `layer` diagram draws a layered architecture: the node objects acting
-as layers (carrying the `value` in the `property` of `layers`) become
-bands stacked top-down in their document order, every other node sits
-in the band of the first layer it reaches through the references of the
-`via` property (followed transitively), and an edge pointing from a
-lower layer to a higher one, i.e. against the layering, is drawn dashed
-in the violation color. A `layer` diagram without any layered node is
-omitted, and it accepts neither a `center` nor a `nest`. A layer
-reaching another layer through the `via` references belongs to that
-one as to a group, so the layers nest into groups (e.g. the `Router`,
-`Proxy`, and `Relay` layers into a `Broker` group within a `Server`
-group), drawn as columns left of the bands, and the Gradia option
+A `layer` diagram draws a layered architecture: the objects matching
+the `objects` patterns of `layers` become bands stacked top-down in
+their document order, every node sits in the band of the first layer it
+reaches through the references of the `via` properties (followed
+transitively, at every step through the first property carrying a
+resolvable reference), and an edge pointing from a lower layer to a
+higher one, i.e. against the layering, is drawn dashed in the violation
+color. A `layer` diagram without any layered node is omitted, and it
+accepts neither a `center` nor a `nest`. A layer reaching another layer
+through the `via` references belongs to that one as to a group, so the
+layers nest into groups (e.g. the `Router`, `Proxy`, and `Relay` layers
+into a `Broker` group within a `Server` group), drawn as columns left
+of the bands, and the Gradia option
 `layer-numbered` of the `config` numbers the layers top-down.
 
 A `sequence` diagram draws the edges of its nodes (usually derived from

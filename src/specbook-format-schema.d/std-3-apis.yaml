@@ -343,7 +343,7 @@
                                 the unit `bit`, in bits (e.g. `4`, `12 bit`), or `variable`
                                 for a field whose size another field states; omitted for a
                                 textual encoding.
-                            value: /\d+(?:\s*bit)?|variable/
+                            value: /[1-9]\d*(?:\s*bit)?|variable/
                             optional: true
                         -   name: VALUE
                             desc: >
