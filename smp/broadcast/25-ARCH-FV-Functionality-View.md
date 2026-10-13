@@ -81,6 +81,7 @@ before it is sent, BECAUSE filtering at the source reduces server load and can p
 -   KIND:           Connector
 -   LAYER:          [[LAYER:router-layer]]
 -   PATTERNS:       [[PATTERN:reverse-proxy-edge]]
+-   DEPENDS-ON:     [[COMPONENT:proxy]]
 
 The router (HAProxy with NFTables) routes incoming HTTP and WebSocket traffic across the proxy instances of an environment
 using round-robin and separates the dev, QA, and production environments, BECAUSE traffic must be balanced and environments
