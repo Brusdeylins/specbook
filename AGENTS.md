@@ -94,7 +94,8 @@ API.
         variable block, and the layer-2 semantic mapping the PDF
         decoration needs outside of CSS
     -   `src/specbook-diagram.ts`: the derivation of the Gradia specs of
-        the configured `graph`/`hub`/`grid` diagrams from the object
+        the configured `graph`/`hub`/`grid`/`layout`/`layer`/`matrix`/`sequence`
+        diagrams (several per object kind) from the object
         model and its references (including the `nest` container
         nesting of the nodes), the compact Gradia geometry presets a
         diagram `config` overrides, their validation, and the in-memory
