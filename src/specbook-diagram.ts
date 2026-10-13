@@ -573,6 +573,43 @@ const labelEdges = (ctx: DiagramContext, labels: NonNullable<SchemaDiagram["edge
     })
 }
 
+/*  turn the edges of a "sequence" diagram into its messages between
+    lifelines: every edge end is mapped onto its lifeline, i.e. onto the
+    object referenced by the "lifelines" property of the end object (its
+    first reference), onto a synthetic lifeline named after its plain
+    value (e.g. "System"), or onto the end object itself, while the
+    lifelines become the nodes in the order of their first appearance  */
+const deriveLifelines = (ctx: DiagramContext, property: string | undefined,
+    edges: DiagramEdge[]): { nodes: SpecObject[], edges: DiagramEdge[] } => {
+    const synthetic = new Map<string, SpecObject>()
+    const lifelineOf = (object: SpecObject): SpecObject => {
+        if (property === undefined)
+            return object
+        const value = propValue(ctx.parenProps, object, property)
+        if (value === undefined)
+            return object
+        const m = referenceOnce.exec(value)
+        if (m !== null)
+            return resolveUnique(ctx.index, m[1].trim(), object).target ?? object
+        const name = plainText(value).split(",")[0].trim()
+        let lifeline = synthetic.get(name)
+        if (lifeline === undefined) {
+            lifeline = { kind: "", id: `@lifeline-${name}`, name, properties: [], children: [] }
+            synthetic.set(name, lifeline)
+        }
+        return lifeline
+    }
+    const nodes    = new Array<SpecObject>()
+    const messages = edges.map((edge) => {
+        const [ source, target ] = [ lifelineOf(edge.source), lifelineOf(edge.target) ]
+        for (const node of [ source, target ])
+            if (!nodes.includes(node))
+                nodes.push(node)
+        return { ...edge, source, target }
+    })
+    return { nodes, edges: messages }
+}
+
 /*  deduplicate the edges (a containment, object, or center edge can
     coincide with a reference edge, and several edge objects can
     describe the very same edge)  */
@@ -970,7 +1007,16 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         edges.push(...deriveCenterEdges(ctx, diagram.centerEdges, nodes, center, errors))
     if (diagram.edgeLabels !== undefined)
         edges = labelEdges(ctx, diagram.edgeLabels, edges)
-    edges = dedupEdges(edges, anchors)
+
+    /*  a "sequence" diagram maps its edges onto messages between
+        lifelines, which keep their order and may repeat  */
+    if (type === "sequence")
+        ({ nodes, edges } = deriveLifelines(ctx, diagram.lifelines, edges))
+    else {
+        if (diagram.lifelines !== undefined)
+            errors.push({ reason: `"${type}" diagram cannot carry a "lifelines" configuration` })
+        edges = dedupEdges(edges, anchors)
+    }
 
     /*  the indirect traces of a traceability matrix  */
     const indirect = columnSet.size > 0 ?
@@ -992,7 +1038,7 @@ const deriveDiagram = (ctx: DiagramContext, object: SpecObject, diagram: SchemaD
         which Gradia rejects, as the nesting already shows them  */
     let nesting: DiagramNesting = { parentOf: new Map(), containers: new Set() }
     if (diagram.nest !== undefined) {
-        if (type === "hub" || type === "layout" || type === "layer" || type === "matrix")
+        if (type === "hub" || type === "layout" || type === "layer" || type === "matrix" || type === "sequence")
             errors.push({ reason: `"${type}" diagram cannot carry a "nest" configuration` })
         else {
             nesting = deriveNesting(ctx, diagram.nest, nodes, nodeSet, errors)

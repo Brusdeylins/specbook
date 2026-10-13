@@ -140,7 +140,7 @@ export type SchemaDiagramShape = {
     its node/edge selection, the edge property roles, the derivation
     switches, the node nesting, and the node annotations  */
 export type SchemaDiagram = {
-    type?:             "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"
+    type?:             "graph" | "hub" | "grid" | "layout" | "layer" | "matrix" | "sequence"
     nodes?:            string
     columns?:          string
     edges?:            string
@@ -163,6 +163,7 @@ export type SchemaDiagram = {
     layers?:           SchemaDiagramLayers
     shapes?:           SchemaDiagramShape[]
     edgeLabels?:       SchemaDiagramEdgeLabels
+    lifelines?:        string
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -279,7 +280,7 @@ const SchemaDiagramShape: v.GenericSchema<SchemaDiagramShape> = v.strictObject({
     shape:             v.picklist([ "box", "database", "queue", "cloud", "stack", "person", "device" ])
 })
 const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
-    type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout", "layer", "matrix" ])),
+    type:              v.optional(v.picklist([ "graph", "hub", "grid", "layout", "layer", "matrix", "sequence" ])),
     nodes:             v.optional(v.string()),
     columns:           v.optional(v.string()),
     edges:             v.optional(v.string()),
@@ -302,6 +303,7 @@ const SchemaDiagram: v.GenericSchema<SchemaDiagram> = v.strictObject({
     layers:            v.optional(SchemaDiagramLayers),
     shapes:            v.optional(v.pipe(v.array(SchemaDiagramShape), v.minLength(1))),
     edgeLabels:        v.optional(SchemaDiagramEdgeLabels),
+    lifelines:         v.optional(v.string()),
     properties:        v.optional(v.array(v.string())),
     config:            v.optional(SchemaDiagramConfig)
 })

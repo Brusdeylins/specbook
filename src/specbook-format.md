@@ -131,7 +131,8 @@ type SchemaDiagramShape = {
                        "stack" | "person" | "device"
 }
 type SchemaDiagram = {
-    type?:             "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"
+    type?:             "graph" | "hub" | "grid" | "layout" | "layer" |
+                       "matrix" | "sequence"
     nodes?:            string
     columns?:          string
     edges?:            string
@@ -152,6 +153,7 @@ type SchemaDiagram = {
     layers?:           SchemaDiagramLayers
     shapes?:           SchemaDiagramShape[]
     edgeLabels?:       SchemaDiagramEdgeLabels
+    lifelines?:        string
     properties?:       string[]
     config?:           Partial<GradiaConfig>
 }
@@ -373,11 +375,12 @@ type SchemaGradiaConfig = Partial<{
     diagram derived for every object of an object kind,
     BECAUSE the relations of a specification are graspable only when drawn
 
--   `SchemaDiagram.type?: "graph" | "hub" | "grid" | "layout" | "layer" | "matrix"`:
+-   `SchemaDiagram.type?: "graph" | "hub" | ... | "sequence"`:
     diagram shape: `graph` (free), `hub` (centered), `grid` (edge-less),
     `layout` (the cells of a binary structure, edge-less), `layer`
     (stacked layers, marking the edges against the layering), `matrix`
-    (a dependency structure matrix, outlining the cycles),
+    (a dependency structure matrix, outlining the cycles), `sequence`
+    (the ordered messages between lifelines),
     BECAUSE one object set tells different stories as different shapes
 
 -   `SchemaDiagram.nodes?: string`:
@@ -548,6 +551,14 @@ type SchemaGradiaConfig = Partial<{
     connecting object keeping its name,
     BECAUSE a dependency reads best by the protocol it is exercised over
 
+-   `SchemaDiagram.lifelines?: string`:
+    property mapping an edge end of a `sequence` diagram onto its
+    lifeline: the object it references first, or a synthetic lifeline
+    named after its plain value (e.g. `System`), the end object itself
+    without it,
+    BECAUSE a message passes between the actors of the steps it connects,
+    not between the steps themselves
+
 -   `SchemaDiagramCells.value?: string`:
     property carrying the fixed value of a node, shown inside its cells,
     BECAUSE a magic number or a reserved bit pattern is part of the structure
@@ -693,17 +704,17 @@ neither `edges` nor `hierarchy`.
 
 ### Diagrams
 
-An object kind can additionally carry a `diagram` field, which derives
-a [Gradia](https://github.com/rse/gradia) diagram for every object of
-that kind (a list of them derives one diagram per entry, rendered one
-below the other). Its `type` selects the diagram shape (`graph`, `hub`,
-`grid`, `layout`, `layer`, or `matrix`), `nodes` and `edges` select the
-participating objects through comma-separated `[[xxx]]` reference
-patterns (`nodes` defaults to the
-object itself plus all objects below it), and `center` names the object
-a `hub` is projected onto (default: `self`). An edge object of the
-center targeting the center itself (a self-reference) places the center
-a second time among its outputs, rendered as a dashed "self" node.
+An object kind can additionally carry a `diagram` field, which derives a
+[Gradia](https://github.com/rse/gradia) diagram for every object of that
+kind (a list of them derives one diagram per entry, rendered one below
+the other). Its `type` selects the diagram shape (`graph`, `hub`,
+`grid`, `layout`, `layer`, `matrix`, or `sequence`), `nodes` and `edges`
+select the participating objects through comma-separated `[[xxx]]`
+reference patterns (`nodes` defaults to the object itself plus all
+objects below it), and `center` names the object a `hub` is projected
+onto (default: `self`). An edge object of the center targeting the
+center itself (a self-reference) places the center a second time among
+its outputs, rendered as a dashed "self" node.
 
 Instead of naming an existing object, `center` can also declare a
 *synthetic* center node, which represents something no specification
@@ -787,6 +798,14 @@ one as to a group, so the layers nest into groups (e.g. the `Router`,
 `Proxy`, and `Relay` layers into a `Broker` group within a `Server`
 group), drawn as columns left of the bands, and the Gradia option
 `layer-numbered` of the `config` numbers the layers top-down.
+
+A `sequence` diagram draws the edges of its nodes (usually derived from
+edge objects in document order, e.g. the handoffs of a workflow) as
+messages top-down between lifelines: every edge end is mapped onto its
+lifeline through the `lifelines` property (e.g. the `ACTOR` of an
+activity), the lifelines appear in the order of their first message,
+and the messages keep their order and may repeat, while a message
+between two ends of the same lifeline loops on it.
 
 A `matrix` diagram draws a dependency structure matrix: its nodes are
 both its rows and its columns (in the order of the `nodes` patterns, or

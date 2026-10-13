@@ -895,17 +895,26 @@
                 initial: INITIAL
                 final: FINAL
             diagram:
-                type: graph
-                edges: "[[HANDOFF:*]]"
-                edgeSource: FROM
-                edgeTarget: TO
-                onlyConnected: true
-                qualified: true
-                nest:
-                    properties:
-                        -   ACTOR
-                config:
-                    size-node-width-max: 440
+                -   type: graph
+                    edges: "[[HANDOFF:*]]"
+                    edgeSource: FROM
+                    edgeTarget: TO
+                    onlyConnected: true
+                    qualified: true
+                    nest:
+                        properties:
+                            -   ACTOR
+                    config:
+                        size-node-width-max: 440
+                -   type: sequence
+                    edges: "[[HANDOFF:*]]"
+                    edgeSource: FROM
+                    edgeTarget: TO
+                    lifelines: ACTOR
+                    shapes:
+                        -   property: TYPE
+                            value: Person
+                            shape: person
             props:
                 -   name: ACTORS
                     desc: >
