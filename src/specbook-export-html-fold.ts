@@ -54,20 +54,20 @@ export const foldScript = (standins: boolean, textless: boolean) => textframe`
         if (tab === null)
             return
         const controls = {
-            graph:   tab.querySelector("div.fold-graphs"),
-            hub:     tab.querySelector("div.fold-hubs"),
-            grid:    tab.querySelector("div.fold-grids"),
-            layout:  tab.querySelector("div.fold-layouts"),
-            layer:   tab.querySelector("div.fold-layers"),
-            matrix:  tab.querySelector("div.fold-matrices"),
+            graph:    tab.querySelector("div.fold-graphs"),
+            hub:      tab.querySelector("div.fold-hubs"),
+            grid:     tab.querySelector("div.fold-grids"),
+            layout:   tab.querySelector("div.fold-layouts"),
+            layer:    tab.querySelector("div.fold-layers"),
+            matrix:   tab.querySelector("div.fold-matrices"),
             sequence: tab.querySelector("div.fold-sequences"),
-            code:    tab.querySelector("div.fold-codes"),
-            image:   tab.querySelector("div.fold-images"),
-            listing: tab.querySelector("div.fold-listings"),
-            level1:  tab.querySelector("div.fold-level1"),
-            level2:  tab.querySelector("div.fold-level2"),
-            level3:  tab.querySelector("div.fold-level3"),
-            text:    tab.querySelector("div.fold-texts")
+            code:     tab.querySelector("div.fold-codes"),
+            image:    tab.querySelector("div.fold-images"),
+            listing:  tab.querySelector("div.fold-listings"),
+            level1:   tab.querySelector("div.fold-level1"),
+            level2:   tab.querySelector("div.fold-level2"),
+            level3:   tab.querySelector("div.fold-level3"),
+            text:     tab.querySelector("div.fold-texts")
         }${standins ? `
         for (const kind of Object.keys(controls))
             controls[kind] ??= document.createElement("div")` : ""}
@@ -115,8 +115,8 @@ export const foldScript = (standins: boolean, textless: boolean) => textframe`
             control; a diagram joins the set of its type plus the sets
             of all nesting levels up to its own one (3 standing for all
             deeper ones), so the sets of the controls overlap  */
-        const folds = { graph: [], hub: [], grid: [], layout: [], layer: [], matrix: [], sequence: [], code: [], image: [], listing: [],
-            level1: [], level2: [], level3: [], text: [] }
+        const folds = { graph: [], hub: [], grid: [], layout: [], layer: [], matrix: [], sequence: [],
+            code: [], image: [], listing: [], level1: [], level2: [], level3: [], text: [] }
         document.querySelectorAll("article div.diagram, nav.doc div.diagram").forEach((el) => {
             const type  = el.getAttribute("data-type") ?? "graph"
             const level = Math.min(Number(el.getAttribute("data-level")) || 1, 3)
@@ -582,23 +582,25 @@ export const omitLong = (omit: Set<OmitAspect> | null,
 export const omittedControls = (omit: Set<OmitAspect>) => {
     const none    = omit.has("diagram:1")
         || (omit.has("diagram:graph") && omit.has("diagram:hub") && omit.has("diagram:grid")
-            && omit.has("diagram:layout") && omit.has("diagram:layer") && omit.has("diagram:matrix") && omit.has("diagram:sequence") && omit.has("diagram:code") && omit.has("diagram:image") && omit.has("diagram:listing"))
+            && omit.has("diagram:layout") && omit.has("diagram:layer") && omit.has("diagram:matrix")
+            && omit.has("diagram:sequence") && omit.has("diagram:code") && omit.has("diagram:image")
+            && omit.has("diagram:listing"))
     const omitted = {
-        graph:   none || omit.has("diagram:graph"),
-        hub:     none || omit.has("diagram:hub"),
-        grid:    none || omit.has("diagram:grid"),
-        layout:  none || omit.has("diagram:layout"),
-        layer:   none || omit.has("diagram:layer"),
-        matrix:  none || omit.has("diagram:matrix"),
+        graph:    none || omit.has("diagram:graph"),
+        hub:      none || omit.has("diagram:hub"),
+        grid:     none || omit.has("diagram:grid"),
+        layout:   none || omit.has("diagram:layout"),
+        layer:    none || omit.has("diagram:layer"),
+        matrix:   none || omit.has("diagram:matrix"),
         sequence: none || omit.has("diagram:sequence"),
-        code:    none || omit.has("diagram:code"),
-        image:   none || omit.has("diagram:image"),
-        listing: none || omit.has("diagram:listing"),
-        level1:  none,
-        level2:  none || omit.has("diagram:2"),
-        level3:  none || omit.has("diagram:2") || omit.has("diagram:3"),
-        text:    omit.has("text:long"),
-        all:     none && omit.has("text:long")
+        code:     none || omit.has("diagram:code"),
+        image:    none || omit.has("diagram:image"),
+        listing:  none || omit.has("diagram:listing"),
+        level1:   none,
+        level2:   none || omit.has("diagram:2"),
+        level3:   none || omit.has("diagram:2") || omit.has("diagram:3"),
+        text:     omit.has("text:long"),
+        all:      none && omit.has("text:long")
     }
     const css =
         (omitted.text ? "\nspan.omit { color: var(--theme-color-specbook-muted) }" : "") +

@@ -9,8 +9,8 @@ import { parseDocument, isNode, LineCounter, type Document } from "yaml"
 import * as v                                                from "valibot"
 import { mergeWith, isPlainObject }                          from "es-toolkit"
 
-import { SchemaConfig, isSchemaMixin, type Schema, type SchemaObject,
-    type SchemaMixin, type SchemaProperty }                             from "./specbook-format-schema.js"
+import { SchemaConfig, isSchemaMixin, diagramsOf, type Schema, type SchemaObject, type SchemaMixin,
+    type SchemaProperty, type SchemaDiagram, type SchemaDiagramType }  from "./specbook-format-schema.js"
 import { compileValueExpr, anchored, admitsReferences, type ValueExpr } from "./specbook-parse-value.js"
 import { type Diagnostic }                                              from "./specbook-diagnostic.js"
 
@@ -75,8 +75,14 @@ const mergeConfig = (target: unknown, source: unknown, list?: string): unknown =
         return items
     }
     else if (isPlainObject(target) && isPlainObject(source))
-        return mergeWith(target, source, (t: unknown, s: unknown, key: string) =>
-            Array.isArray(t) && Array.isArray(s) ? mergeConfig(t, s, key) : undefined)
+        return mergeWith(target, source, (t: unknown, s: unknown, key: string) => {
+            /*  a single diagram merges into a diagram list (and a list
+                into a single diagram) as the list of just that diagram,
+                so it still matches its counterpart by type  */
+            if (key === "diagram" && (Array.isArray(t) || Array.isArray(s)) && t !== undefined)
+                return mergeConfig(Array.isArray(t) ? t : [ t ], Array.isArray(s) ? s : [ s ], key)
+            return Array.isArray(t) && Array.isArray(s) ? mergeConfig(t, s, key) : undefined
+        })
     else
         return source
 }
@@ -190,7 +196,7 @@ const checkProperties = (props: SchemaProperty[], at: YamlPath, diagnose: Diagno
 
 /*  the properties of an object kind: its own ones, followed by those of
     its mixins (in their order) which it does not declare itself, as an
-    own declaration refines the one of a mixin  */
+    own declaration replaces the one of a mixin as a whole  */
 const propsOf = (object: SchemaObject, mixins: Map<string, SchemaMixin>): SchemaProperty[] => {
     const props = [ ...(object.props ?? []) ]
     for (const name of object.mixins ?? [])
@@ -242,6 +248,87 @@ const checkAutomaton = (object: SchemaObject, mixins: Map<string, SchemaMixin>, 
                 `"automaton" ${field} property "${automaton[field]}" is not a property of "${automaton.nodes}"`)
 }
 
+/*  the diagram options restricted to some diagram types (an option
+    set to "false" counts as absent), the options a diagram type
+    requires, and the edge-less diagram types  */
+const diagramOptionTypes: Partial<Record<keyof SchemaDiagram, SchemaDiagramType[]>> = {
+    center:        [ "hub" ],
+    centerEdges:   [ "hub" ],
+    nest:          [ "graph", "grid" ],
+    cells:         [ "layout" ],
+    layers:        [ "layer" ],
+    columns:       [ "matrix" ],
+    lifelines:     [ "sequence" ],
+    edges:         [ "graph", "hub", "layer", "matrix", "sequence" ],
+    hierarchy:     [ "graph", "hub", "layer", "matrix", "sequence" ],
+    deep:          [ "graph", "hub", "layer", "matrix", "sequence" ],
+    labeled:       [ "graph", "hub", "layer", "matrix", "sequence" ],
+    onlyConnected: [ "graph", "matrix" ]
+}
+const diagramRequired: Partial<Record<SchemaDiagramType, (keyof SchemaDiagram)[]>> = {
+    layout: [ "cells" ],
+    layer:  [ "layers" ]
+}
+
+/*  check the diagrams of an object kind: the types of a diagram list
+    have to be distinct (as a list merges by type), every option has to
+    suit the diagram type, a traceability matrix cannot drop its
+    unconnected rows and columns (as they are its gaps), the "/xxx/"
+    shape values have to be valid patterns, and the property names of
+    the newer options have to name a property of the schema (as a typo
+    would otherwise silently empty the diagram)  */
+const checkDiagrams = (object: SchemaObject, propNames: Set<string>, at: YamlPath, diagnose: Diagnose) => {
+    const list  = Array.isArray(object.diagram)
+    const types = new Set<string>()
+    for (const [ d, diagram ] of diagramsOf(object).entries()) {
+        const where = list ? [ ...at, "diagram", d ] : [ ...at, "diagram" ]
+        const type  = diagram.type ?? "graph"
+        if (types.has(type))
+            diagnose([ ...where, "type" ], `diagram type "${type}" occurs more than once in the diagram list`)
+        types.add(type)
+        for (const [ option, allowed ] of Object.entries(diagramOptionTypes)) {
+            const value = diagram[option as keyof SchemaDiagram]
+            if (value !== undefined && value !== false && !allowed.includes(type))
+                diagnose([ ...where, option ], `"${type}" diagram cannot carry ` +
+                    `${(/^[aeiou]/).test(option) ? "an" : "a"} "${option}" configuration`)
+        }
+        for (const option of diagramRequired[type] ?? [])
+            if (diagram[option] === undefined)
+                diagnose(where, `"${type}" diagram requires a "${option}" configuration`)
+        if (diagram.columns !== undefined && diagram.onlyConnected === true)
+            diagnose([ ...where, "onlyConnected" ],
+                "traceability matrix (with \"columns\") cannot carry \"onlyConnected\", as it would drop its gaps")
+        for (const [ r, rule ] of (diagram.shapes ?? []).entries()) {
+            const m = /^\/(.*)\/$/.exec(rule.value)
+            if (m === null)
+                continue
+            try {
+                anchored(m[1])
+            }
+            catch (err) {
+                diagnose([ ...where, "shapes", r, "value" ], `invalid shape pattern "${rule.value}": ` +
+                    (err instanceof Error ? err.message : String(err)))
+            }
+        }
+        const names: [ YamlPath, string | undefined ][] = [
+            [ [ "cells", "offset" ], diagram.cells?.offset ],
+            [ [ "cells", "size" ], diagram.cells?.size ],
+            [ [ "cells", "value" ], diagram.cells?.value ],
+            [ [ "lifelines" ], diagram.lifelines ],
+            [ [ "edgeLabels", "source" ], diagram.edgeLabels?.source ],
+            [ [ "edgeLabels", "target" ], diagram.edgeLabels?.target ],
+            ...(diagram.layers?.via ?? []).map((name, i): [ YamlPath, string ] => [ [ "layers", "via", i ], name ]),
+            ...(diagram.linkProps ?? []).map((name, i): [ YamlPath, string ] => [ [ "linkProps", i ], name ]),
+            ...(diagram.shapes ?? []).map((rule, i): [ YamlPath, string ] => [ [ "shapes", i, "property" ], rule.property ]),
+            ...(diagram.edgeLabels?.properties ?? []).map((name, i): [ YamlPath, string ] =>
+                [ [ "edgeLabels", "properties", i ], name ])
+        ]
+        for (const [ path, name ] of names)
+            if (name !== undefined && !propNames.has(name))
+                diagnose([ ...where, ...path ], `diagram property "${name}" is not a property of any object kind`)
+    }
+}
+
 /*  check the constraints of a structurally valid configuration which
     are beyond its schema: sibling objects have to stay distinctly
     resolvable, "file" fields are allowed on the first (artifact) level
@@ -262,6 +349,19 @@ const checkConstraints = (
         const { file, line, column } = posOfPath(path)
         diagnostics.push({ file, line, column, severity: "error", message })
     }
+
+    /*  the names of all properties of the schema, against which the
+        property names of the diagram configurations are checked  */
+    const propNames = new Set<string>()
+    const collect = (entries: SchemaConfig) => {
+        for (const entry of entries) {
+            for (const prop of entry.props ?? [])
+                propNames.add(prop.name)
+            if (!isSchemaMixin(entry) && entry.children !== undefined)
+                collect(entry.children)
+        }
+    }
+    collect(config)
     const check = (entries: SchemaConfig, path: YamlPath, depth: number) => {
         /*  the sibling objects are resolved by kind and id on the first
             (artifact) level and by kind alone below it, so a sibling
@@ -279,10 +379,10 @@ const checkConstraints = (
 
             /*  a mixin carries nothing but its properties  */
             if (isSchemaMixin(entry)) {
-                checkProperties((entry as SchemaMixin).props, at, diagnose)
+                checkProperties(entry.props, at, diagnose)
                 continue
             }
-            const object = entry as SchemaObject
+            const object = entry
             for (const [ j, name ] of (object.mixins ?? []).entries())
                 if (!mixins.has(name))
                     diagnose([ ...at, "mixins", j ], `unknown mixin "${name}"`)
@@ -298,6 +398,7 @@ const checkConstraints = (
                     `"file" field "${object.file}" is not a relative path below the base directory`)
             checkProperties(object.props ?? [], at, diagnose)
             checkAutomaton(object, mixins, at, diagnose)
+            checkDiagrams(object, propNames, at, diagnose)
             for (const field of [ "referenced", "coverage" ] as const)
                 for (const [ j, entry ] of (object[field] ?? []).entries()) {
                     /*  a reference coverage entry has to be a single
@@ -419,7 +520,7 @@ export const loadConfig = (files: string[]): { config?: Schema, diagnostics: Dia
 
     /*  check the constraints beyond the structural schema  */
     const mixins = new Map(result.output.filter((entry) => isSchemaMixin(entry))
-        .map((entry) => [ (entry as SchemaMixin).mixin, entry as SchemaMixin ]))
+        .map((entry) => [ entry.mixin, entry ]))
     diagnostics.push(...checkConstraints(result.output, mixins, posOfPath))
     if (diagnostics.length > 0)
         return { diagnostics }
@@ -435,7 +536,7 @@ export const loadConfig = (files: string[]): { config?: Schema, diagnostics: Dia
             ...(object.children !== undefined ? { children: object.children.map(expand) } : {})
         }
     }
-    const config = result.output.filter((entry) => !isSchemaMixin(entry))
-        .map((entry) => expand(entry as SchemaObject))
+    const config = result.output.filter((entry): entry is SchemaObject => !isSchemaMixin(entry))
+        .map((entry) => expand(entry))
     return { config, diagnostics }
 }

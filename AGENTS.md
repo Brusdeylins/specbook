@@ -33,9 +33,10 @@ API.
         the latter also yielding the print stylesheet)
     -   `src/specbook-export-ast.ts`: the AST renderer (JSON, JSON5,
         YAML, TOON), optimizing the embedded images and attaching the
-        derived Gradia spec of a diagram-configured object as its `diagram` field (a list of
-        specs for an object kind configuring several diagrams, except for the
-        title object, whose diagram the HTML/PDF export reserves) and
+        derived Gradia spec of a diagram-configured object as its
+        `diagram` field (a list of specs for an object kind configuring a
+        diagram list, however many of them render, except for the title
+        object, whose diagram the HTML/PDF export reserves) and
         the covered/total counts of a coverage-configured object as its
         `coverage` field
     -   `src/specbook-export-md.ts`: the normalized Markdown renderer,
@@ -278,14 +279,15 @@ merged in order into one effective schema configuration (the later files
 into the earlier ones, via `mergeWith` of `es-toolkit`), where the
 objects merge deeply and the list elements are matched by identity
 (artifacts by `kind` plus `id`/`name`, mixins by `mixin`, nested
-objects by `kind`, properties by `name`): every file has to be valid
+objects by `kind`, properties by `name`, and diagrams by `type`, a
+single diagram merging like a list of just it): every file has to be valid
 YAML on its own, while the merged result alone is validated.
 
 A first-level entry carrying a `mixin` field instead of a `kind` is a
 *mixin*, a named group of properties (e.g. the `EVIDENCE` group of the
 standard schema), which every object kind listing it in its `mixins`
 field receives as if declared itself (its own property of the same name
-taking precedence). `loadConfig` of `src/specbook-config.ts` validates
+replacing the one of the mixin as a whole). `loadConfig` of `src/specbook-config.ts` validates
 the mixins (Valibot, `SchemaConfig`), reports an unknown mixin name, and
 expands the mixins only after the merge, so every consumer sees plain
 object kinds (`Schema`) and a later file can extend a mixin or let an

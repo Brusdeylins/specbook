@@ -166,6 +166,10 @@ test("diagram lists validate, merge by type, and check the layout cells", () => 
 -   kind: SPEC
     name: Things
     file: things.md
+    props:
+        -   name: OFFSET
+        -   name: SIZE
+        -   name: VALUE
     diagram:
         -   type: grid
         -   type: layout
@@ -197,4 +201,93 @@ test("diagram lists validate, merge by type, and check the layout cells", () => 
     const result = loadConfig([ broken ])
     assert.equal(result.config, undefined)
     assert.match(result.diagnostics[0].message, /cells/)
+})
+
+/*  a minimal configuration of a single artifact carrying the given
+    diagram configuration (indented as the value of "diagram:")  */
+const withDiagram = (diagram) => `
+-   kind: SPEC
+    name: Things
+    file: things.md
+    props:
+        -   name: OFFSET
+        -   name: SIZE
+        -   name: KIND
+        -   name: PART-OF
+    diagram:${diagram}`
+
+test("a single diagram merges into a diagram list by type and vice versa", () => {
+    const [ list, single ] = configFiles(withDiagram(`
+        -   type: grid
+        -   type: hub
+`), `
+-   kind: SPEC
+    name: Things
+    diagram:
+        type: hub
+        qualified: true
+`)
+    const merged = loadConfig([ list, single ])
+    assert.deepEqual(merged.diagnostics, [])
+    assert.deepEqual(merged.config[0].diagram, [ { type: "grid" }, { type: "hub", qualified: true } ])
+    const [ base, overlay ] = configFiles(withDiagram(`
+        type: hub
+`), `
+-   kind: SPEC
+    name: Things
+    diagram:
+        -   type: hub
+            qualified: true
+        -   type: grid
+`)
+    const reversed = loadConfig([ base, overlay ])
+    assert.deepEqual(reversed.diagnostics, [])
+    assert.deepEqual(reversed.config[0].diagram, [ { type: "hub", qualified: true }, { type: "grid" } ])
+})
+
+test("a diagram list with a duplicate type is reported", () => {
+    const [ file ] = configFiles(withDiagram(`
+        -   type: graph
+        -   type: graph
+            qualified: true
+`))
+    const { config, diagnostics } = loadConfig([ file ])
+    assert.equal(config, undefined)
+    assert.match(diagnostics[0].message, /diagram type "graph" occurs more than once/)
+})
+
+test("diagram options not suiting the diagram type are reported at load time", () => {
+    for (const [ diagram, message ] of [
+        [ "\n        type: grid\n        hierarchy: true\n", /"grid" diagram cannot carry a "hierarchy"/ ],
+        [ "\n        type: hub\n        nest:\n            parent: true\n", /"hub" diagram cannot carry a "nest"/ ],
+        [ "\n        type: graph\n        columns: \"[[SPEC:*]]\"\n", /"graph" diagram cannot carry a "columns"/ ],
+        [ "\n        type: layer\n", /"layer" diagram requires a "layers"/ ],
+        [ "\n        type: matrix\n        columns: \"[[SPEC:*]]\"\n        onlyConnected: true\n",
+            /cannot carry "onlyConnected", as it would drop its gaps/ ] ]) {
+        const [ file ] = configFiles(withDiagram(diagram))
+        const { config, diagnostics } = loadConfig([ file ])
+        assert.equal(config, undefined)
+        assert.match(diagnostics[0].message, message)
+        assert.ok(diagnostics[0].line > 1)
+    }
+})
+
+test("an invalid shape pattern and an unknown diagram property are reported", () => {
+    const [ file ] = configFiles(withDiagram(`
+        type: layer
+        layers:
+            objects: "[[SPEC:*]]"
+            via:
+                -   PARTOF
+        shapes:
+            -   property: KIND
+                value: /[/
+                shape: database
+`))
+    const { config, diagnostics } = loadConfig([ file ])
+    assert.equal(config, undefined)
+    const messages = diagnostics.map((d) => d.message)
+    assert.ok(messages.some((m) => /invalid shape pattern "\/\[\/"/.test(m)), messages.join("\n"))
+    assert.ok(messages.some((m) => /diagram property "PARTOF" is not a property of any object kind/.test(m)),
+        messages.join("\n"))
 })

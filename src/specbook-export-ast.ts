@@ -73,19 +73,22 @@ export const renderAst = async (specification: Spec, format: AstFormat,
         (an invalid diagram situation omits the diagram, as it is
         already reported as a lint diagnostic, the diagram of the
         title object is reserved for the HTML/PDF export, and the
-        diagrams of the omitted aspects are left out), and
+        diagrams of the omitted aspects are left out), as a list of specs
+        whenever the object kind configures a list of diagrams, so its
+        shape does not depend on how many of them are rendered, and
         the reference coverage of the coverage-configured objects as
         "coverage" fields (the counts only, as the export is intended
         for machine consumption)  */
     if (config !== undefined) {
         const diagrams  = specDiagrams(specification, config)
         const omitted   = omittedDiagrams(specification, omit)
-        const coverages = specCoverage(buildLinkIndex(specification), collectSchemas(specification, config))
+        const schemas   = collectSchemas(specification, config)
+        const coverages = specCoverage(buildLinkIndex(specification), schemas)
         const walk = (object: SpecObject, node: PlainObject) => {
             const specs = isTitleObject(object) ? [] : (diagrams.get(object) ?? [])
                 .flatMap((result) => result.spec !== undefined && !omitted(object, result.type) ? [ result.spec ] : [])
             if (specs.length > 0)
-                node.diagram = specs.length === 1 ? specs[0] : specs
+                node.diagram = Array.isArray(schemas.get(object)?.diagram) ? specs : specs[0]
             const coverage = coverages.get(object)
             if (coverage !== undefined)
                 node.coverage = coverage.map(({ pattern, covered, uncovered }) =>

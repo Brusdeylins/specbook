@@ -6,22 +6,18 @@ Modified: 2026-10-12 21:00
 ARCH: Functionality View (FV)
 =============================
 
-##  COMPONENT: Access Layer {{access-layer}}
-
--   KIND: Layer
+##  LAYER: Access Layer {{access-layer}}
 
 The layer facing the producers, BECAUSE the intake protocol must not leak into the core.
 
-##  COMPONENT: Core Layer {{core-layer}}
-
--   KIND: Layer
+##  LAYER: Core Layer {{core-layer}}
 
 The layer holding the processing, BECAUSE it must stay independent of the intake protocol.
 
 ##  COMPONENT: Gateway {{gateway}}
 
 -   KIND:       Component
--   PART-OF:    [[COMPONENT:access-layer]]
+-   LAYER:      [[LAYER:access-layer]]
 -   DEPENDS-ON: [[COMPONENT:ingest]]
 
 The gateway terminates the producer connections, BECAUSE the core must not handle sockets.
@@ -29,7 +25,7 @@ The gateway terminates the producer connections, BECAUSE the core must not handl
 ##  COMPONENT: Ingest {{ingest}}
 
 -   KIND:       Component
--   PART-OF:    [[COMPONENT:core-layer]]
+-   LAYER:      [[LAYER:core-layer]]
 -   DEPENDS-ON: [[COMPONENT:gateway]]
 -   EVIDENCE:   Observed
 -   SOURCE:     src/ingest.c:10-80

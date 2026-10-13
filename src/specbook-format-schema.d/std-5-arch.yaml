@@ -395,9 +395,10 @@
         -   type: layer
             nodes: "[[FV.COMPONENT:*]]"
             layers:
-                via: PART-OF
-                property: KIND
-                value: Layer
+                objects: "[[FV.LAYER:*]]"
+                via:
+                    -   LAYER
+                    -   PART-OF
             shapes:
                 -   property: KIND
                     value: Datastore
@@ -419,6 +420,33 @@
             onlyConnected: true
             qualified: true
     children:
+        -   kind: LAYER
+            desc: >
+                A horizontal stratum of a layered architecture, named with a short (1-3 word)
+                summary (e.g. `Presentation Layer`, `Domain Layer`, `Persistence Layer`) and
+                described by a 1-sentence description of the level of abstraction its components
+                share plus a 1-sentence rationale ("why") for the layer. The layers are ordered
+                top-down in document order, and a component may depend on the components of its
+                own and of the lower layers only, so the layer diagram of the Functionality View
+                marks every dependency pointing upwards; a layer is a separate kind instead of a
+                component, BECAUSE a layer groups components without owning a responsibility
+                itself and hence neither realizes, provides, nor is implemented by anything.
+            optional: true
+            mixins:
+                -   EVIDENCE
+            format:
+                type: compact
+                maxTableColumns: 5
+            props:
+                -   name: PART-OF
+                    desc: >
+                        Reference to the FUNCTIONALITY-VIEW layer this layer is a sub-layer of,
+                        the outer layer then acting as a group of layers (e.g. the `Server Layers`
+                        grouping the layers running in the data center); omitted for a top-level
+                        layer.
+                    value: "[[FV.LAYER:*]]"
+                    optional: true
+                    acyclic: true
         -   kind: COMPONENT
             desc: >
                 A single functional component, named with a short (2-5 word) summary (e.g.
@@ -437,7 +465,7 @@
             diagram:
                 type: hub
                 center: self
-                nodes: "[[FV.COMPONENT:*]], [[FR.REQUIREMENT:*]], [[PATTERN:*]], [[INTERFACE:*]],
+                nodes: "[[FV.LAYER:*]], [[FV.COMPONENT:*]], [[FR.REQUIREMENT:*]], [[PATTERN:*]], [[INTERFACE:*]],
                     [[DM.ENTITY:*]], [[UNIT:*]], [[STRUCTURE:*]], [[ALGORITHM:*]], [[PIPELINE:*]],
                     [[NODE:*]], [[CONCERN:*]], [[TACTIC:*]], [[DECISION:*]], [[CODE-PATTERN:*]],
                     [[SYMBOL:*]]"
@@ -462,26 +490,24 @@
                         -   `Subsystem`: Larger composite grouping several components.
                         -   `Datastore`: Component holding the persistent data of the solution
                                          (e.g. a database, a file store), drawn as a cylinder.
-                        -   `Layer`:     Horizontal stratum of a layered architecture, grouping
-                                         the components of one level of abstraction, where the
-                                         layers are ordered top-down in document order and a
-                                         component may depend on the components of its own and
-                                         of the lower layers only (the layer diagram of the
-                                         Functionality View marks every dependency pointing
-                                         upwards), where a layer `PART-OF` another one is
-                                         a sub-layer and the outer one a group of layers.
-                    value: enum(Component,Service,Module,Connector,Subsystem,Datastore,Layer)
+                    value: enum(Component,Service,Module,Connector,Subsystem,Datastore)
                 -   name: PART-OF
                     desc: >
                         Reference to the FUNCTIONALITY-VIEW object this component is contained
                         in, expressing the composition hierarchy the kinds imply: a `Module`
-                        references the component it groups functionality within, a component
-                        references the `Subsystem` it belongs to, and a component or subsystem
-                        references the `Layer` it resides in; omitted for a top-level
-                        component.
+                        references the component it groups functionality within, and a
+                        component references the `Subsystem` it belongs to; omitted for a
+                        top-level component.
                     value: "[[FV.COMPONENT:*]]"
                     optional: true
                     acyclic: true
+                -   name: LAYER
+                    desc: >
+                        Reference to the FUNCTIONALITY-VIEW layer the component resides in;
+                        omitted for a component inheriting the layer of the component it is
+                        `PART-OF`, or for a solution without a layered architecture.
+                    value: "[[FV.LAYER:*]]"
+                    optional: true
                 -   name: REALIZES
                     desc: >
                         Comma-separated references to the FUNCTIONAL-REQUIREMENTS objects the
