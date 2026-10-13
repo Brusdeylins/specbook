@@ -1108,7 +1108,7 @@
 -   kind: ARCH
     name: Named Constants
     id: NC
-    file: 29-ARCH-NC-Named-Constants.md
+    file: 35-ARCH-NC-Named-Constants.md
     desc: >
         The named values the solution is built around and tuned by -- limits, defaults, sizes,
         durations, budgets, tolerances, and identifiers (e.g. a maximum message size, a retry
@@ -1221,7 +1221,7 @@
 -   kind: ARCH
     name: Processing View
     id: PV
-    file: 30-ARCH-PV-Processing-View.md
+    file: 36-ARCH-PV-Processing-View.md
     desc: >
         The internal processing of the solution below its functional components: the in-memory
         data structures it keeps, the algorithms and compute kernels it runs, and the pipelines
@@ -1561,7 +1561,7 @@
 -   kind: ARCH
     name: Deployment View
     id: DV
-    file: 31-ARCH-DV-Deployment-View.md
+    file: 29-ARCH-DV-Deployment-View.md
     desc: >
         The environment into which the solution is deployed, partitioning it into tiers and mapping
         software elements to the runtime platform, hardware, and network topology.
@@ -1826,7 +1826,7 @@
 -   kind: ARCH
     name: Operations View
     id: OV
-    file: 32-ARCH-OV-Operations-View.md
+    file: 30-ARCH-OV-Operations-View.md
     desc: >
         The way the solution is operated, administered, and supported in production, defining the
         standing procedures by which the operating organization installs, configures, migrates,
@@ -1941,7 +1941,7 @@
 -   kind: ARCH
     name: Quality Perspectives
     id: QP
-    file: 33-ARCH-QP-Quality-Perspectives.md
+    file: 31-ARCH-QP-Quality-Perspectives.md
     desc: >
         How the Non-Functional Requirements (NR) are addressed by the architecture, through the
         tactics built into the solution across the views.
@@ -2088,7 +2088,7 @@
 -   kind: ARCH
     name: Design Decisions
     id: DD
-    file: 34-ARCH-DD-Design-Decisions.md
+    file: 32-ARCH-DD-Design-Decisions.md
     desc: >
         The major decisions related to the solution design, each recording the forces at play, the
         chosen response, and the reasoning that justifies it. The artifact is the last
@@ -2348,7 +2348,7 @@
 -   kind: ARCH
     name: Code Patterns
     id: CP
-    file: 35-ARCH-CP-Code-Patterns.md
+    file: 33-ARCH-CP-Code-Patterns.md
     desc: >
         The implementation patterns the source code of the solution follows, each prescribing how
         one recurring concern (e.g. authorization enforcement, entity persistence, error
@@ -2467,16 +2467,16 @@
 -   kind: ARCH
     name: Code Map
     id: CM
-    file: 36-ARCH-CM-Code-Map.md
+    file: 37-ARCH-CM-Code-Map.md
     desc: >
         The mapping of the specification onto the source code or the shipped artifacts of the
         solution, each symbol of the code (a module, file, type, function, field, or resource)
         naming its location and the specification objects it implements, so that the
         specification and the code can be traced into each other in both directions. The artifact
         serves the forward-engineering (where has the specified element been implemented, what is
-        still missing) as well as the reverse-engineering (which specified element does an
-        obfuscated or cryptically named symbol realize), and is absent when the traceability is
-        kept outside the specification.
+        still missing) as well as the reading of the code (which specified element does a
+        generated or tersely named symbol realize), and is absent when the traceability is kept
+        outside the specification.
 
         The artifact follows the Code Patterns, as a symbol may implement any object preceding it,
         and reports the share of the components, types, endpoints, constants, structures,
@@ -2512,8 +2512,8 @@
         -   kind: SYMBOL
             desc: >
                 A single symbol of the code, named with the name it is known by in the
-                specification (usually its identifier in the code, or the meaningful name
-                recovered for an obfuscated one) and described by a 1-sentence description of
+                specification (usually its identifier in the code, or a meaningful name for a
+                generated or tersely named one) and described by a 1-sentence description of
                 its role ("what") plus a 1-sentence rationale ("why") for the mapping. A symbol
                 is mapped only where the trace is worth keeping (e.g. the entry points of the
                 components, the implementations of the algorithms and structures), not for every
@@ -2539,17 +2539,17 @@
                 -   name: IDENTIFIER
                     desc: >
                         The exact identifier of the symbol in the code, where it differs from
-                        the name (e.g. an obfuscated, mangled, or fully qualified identifier).
+                        the name (e.g. a generated, mangled, or fully qualified identifier).
                     optional: true
                 -   name: ALIAS
                     desc: >
-                        Comma-separated further names of the symbol (e.g. its original name
-                        before an obfuscation or a rename, its exported or display name).
+                        Comma-separated further names of the symbol (e.g. its former name
+                        before a rename, its exported or display name).
                     optional: true
                 -   name: LOCATION
                     desc: >
                         Where the symbol resides (e.g. `src/net/codec.c:120-184`,
-                        `lib/core.dll!0x4012a0`), relative to the root of the code base.
+                        `build/libcore.so+0x4012a0`), relative to the root of the code base.
                     optional: true
                 -   name: PART-OF
                     desc: >

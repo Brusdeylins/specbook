@@ -63,21 +63,21 @@ test("sample specification lints without errors", async () => {
 })
 
 test("invalid constant class is an error", async () => {
-    const basedir = variant("29-ARCH-NC-Named-Constants.md", "CLASS: Size", "CLASS: Bogus")
+    const basedir = variant("35-ARCH-NC-Named-Constants.md", "CLASS: Size", "CLASS: Bogus")
     const result  = await new SpecBook().lint({ config: [ "std" ], basedir })
     assert.equal(errors(result).length, 1)
     assert.match(errors(result)[0].message, /CLASS/)
 })
 
 test("invalid evidence of a mixin property is an error", async () => {
-    const basedir = variant("36-ARCH-CM-Code-Map.md", "EVIDENCE:   Inferred", "EVIDENCE:   Guessed")
+    const basedir = variant("37-ARCH-CM-Code-Map.md", "EVIDENCE:   Inferred", "EVIDENCE:   Guessed")
     const result  = await new SpecBook().lint({ config: [ "std" ], basedir })
     assert.equal(errors(result).length, 1)
     assert.match(errors(result)[0].message, /EVIDENCE/)
 })
 
 test("unreferenced constant is a warning", async () => {
-    const basedir = variant("30-ARCH-PV-Processing-View.md", "-   BUDGET: [[CONSTANT:batch-budget]]\n", "")
+    const basedir = variant("36-ARCH-PV-Processing-View.md", "-   BUDGET: [[CONSTANT:batch-budget]]\n", "")
     const result  = await new SpecBook().lint({ config: [ "std" ], basedir })
     assert.deepEqual(errors(result), [])
     assert.equal(warnings(result).length, 1)
@@ -85,7 +85,7 @@ test("unreferenced constant is a warning", async () => {
 })
 
 test("stage fed by a stage of another pipeline is an error", async () => {
-    const basedir = variant("30-ARCH-PV-Processing-View.md",
+    const basedir = variant("36-ARCH-PV-Processing-View.md",
         "The stage verifies the checksum, BECAUSE corrupt records must not enter the queue.\n",
         "The stage verifies the checksum, BECAUSE corrupt records must not enter the queue.\n\n" +
         "##  PIPELINE: Other Path {{other-path}}\n\n" +
