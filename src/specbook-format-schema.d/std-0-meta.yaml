@@ -55,7 +55,7 @@
 #   | ARCH: Operations View (OV)             |     |      |      |     |     |      |     |  X  |
 #   | ARCH: Quality Perspectives (QP)        |     |      |      |     |     |      |     |  X  |
 #   | ARCH: Design Decisions (DD)            |     |      |      |     |     |      |     |  X  |
-#   | ARCH: Code Map (CM)                  |     |      |      |     |     |      |     |  X  |
+#   | ARCH: Code Map (CM)                    |     |      |      |     |     |      |     |  X  |
 #   | -------------------------------------- | --- | ---- | ---- | --- | --- | ---- | --- | --- |
 #   | TEST: Test Cases (TC)                  |     |      |      |     |     |      |  X  |     |
 #
@@ -83,6 +83,12 @@
 #       the rest. E.g. the Domain Workflows (summary level: many actors,
 #       many sittings) precede the Use Cases (user-goal level: one actor,
 #       one sitting), which reference back into the workflow activities.
+#
+#   -   The file numbers of the artifacts are stable: an artifact added
+#       later takes the next free number, even where its position in the
+#       document lies further up, because the files of an existing
+#       specification otherwise silently stop matching their (optional)
+#       artifacts.
 #
 #   -   All object references are strictly back-references, i.e., later
 #       objects reference earlier ones. Only the "referenced" coverage
@@ -112,7 +118,7 @@
 #       Map) name no application domain, so the same kinds serve a
 #       compiler, a database, an embedded firmware, a web service, or a
 #       data pipeline, and serve the forward-engineering of a new
-#       solution as well as the reverse-engineering of an existing one.
+#       solution as well as the documentation of an existing one.
 #
 #   -   A cross-cutting group of properties (e.g. the `EVIDENCE` of a
 #       statement) is defined once as a mixin and included by the object

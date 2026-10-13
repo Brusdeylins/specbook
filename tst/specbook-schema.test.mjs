@@ -48,10 +48,10 @@ test("standard schema places the new artifacts in document order", () => {
     const at  = (id) => ids.indexOf(id)
     assert.ok(at("CO") < at("NC") && at("NC") < at("PV") && at("PV") < at("DV"))
     assert.ok(at("CP") < at("CM") && at("CM") < at("TC"))
-    assert.equal(kindOf(config, "NC").file, "29-ARCH-NC-Named-Constants.md")
-    assert.equal(kindOf(config, "PV").file, "30-ARCH-PV-Processing-View.md")
-    assert.equal(kindOf(config, "CM").file, "36-ARCH-CM-Code-Map.md")
-    assert.equal(kindOf(config, "TC").file, "37-TEST-TC-Test-Cases.md")
+    assert.equal(kindOf(config, "NC").file, "35-ARCH-NC-Named-Constants.md")
+    assert.equal(kindOf(config, "PV").file, "36-ARCH-PV-Processing-View.md")
+    assert.equal(kindOf(config, "CM").file, "37-ARCH-CM-Code-Map.md")
+    assert.equal(kindOf(config, "TC").file, "34-TEST-TC-Test-Cases.md")
 })
 
 test("standard schema expands the EVIDENCE mixin and drops the mixins", () => {
