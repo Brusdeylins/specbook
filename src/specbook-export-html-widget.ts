@@ -318,6 +318,26 @@ export const tocPanelScript = textframe`
         const list    = panel.querySelector("div.toc-list")
         const links   = Array.from(panel.querySelectorAll("a"))
         const targets = links.map((a) => document.getElementById(decodeURIComponent(a.hash.slice(1))))
+
+        /*  tell whether the top of a target lies at or below a viewport
+            position, where a target inside a top-level section, whose
+            rendering the browser skips while it is outside the viewport
+            (see "content-visibility" in the stylesheet), is located by the
+            box of its section as long as that lies entirely on one side of
+            the position, as measuring the target itself would force the
+            browser to lay out the skipped section (and change its height
+            from the estimated one in the middle of the search)  */
+        const sections = targets.map((el) => el?.closest("article > section") ?? null)
+        const below = (k, y) => {
+            if (sections[k] !== null) {
+                const box = sections[k].getBoundingClientRect()
+                if (box.top >= y)
+                    return true
+                if (box.bottom < y)
+                    return false
+            }
+            return targets[k].getBoundingClientRect().top >= y
+        }
         let active = null
         const reveal = () => {
             const top = active.getBoundingClientRect().top - list.getBoundingClientRect().top
@@ -346,7 +366,7 @@ export const tocPanelScript = textframe`
                     hi = mid - 1
                     continue
                 }
-                if (targets[k].getBoundingClientRect().top >= -1) {
+                if (below(k, -1)) {
                     first = k
                     hi = mid - 1
                 }
@@ -356,7 +376,7 @@ export const tocPanelScript = textframe`
             let next = first
             while (next < targets.length && targets[next] === null)
                 next++
-            if (next < targets.length && targets[next].getBoundingClientRect().top < window.innerHeight)
+            if (next < targets.length && !below(next, window.innerHeight))
                 current = links[next]
             else {
                 let prev = first - 1

@@ -252,6 +252,14 @@ export const renderHtml = async (specification: Spec, config?: Schema,
         const doc       = meta !== undefined ? diagrams?.get(meta) : undefined
         const objects   = artifacts.flatMap((artifact) => artifact.objects)
         const entries   = tocEntries(objects, tocPages)
+
+        /*  number the top-level objects across all artifacts  */
+        let   number    = 1
+        const contents  = artifacts.map((artifact) => {
+            const html = renderArtifact(artifact, number)
+            number += artifact.objects.length
+            return html
+        })
         return render("Document", { Document: {
             title:       documentTitle(specification).title,
             lang,
@@ -274,7 +282,7 @@ export const renderHtml = async (specification: Spec, config?: Schema,
                     title !== undefined, doc !== undefined)) : "",
             tocscript:   entries.length > 0 ? safe(tocPanelScript) : "",
             doc:         doc !== undefined ? safe(render("Doc", { Doc: { diagram: safe(doc) } })) : "",
-            artifacts:   safe(artifacts.map((artifact) => renderArtifact(artifact)).join(""))
+            artifacts:   safe(contents.join(""))
         } })
     })
 }
