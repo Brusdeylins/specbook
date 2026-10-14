@@ -329,17 +329,41 @@ export const tocPanelScript = textframe`
                 window.removeEventListener("scroll", spy)
                 return
             }
+            /*  the targets are in document order, so their tops are
+                monotonic: binary-search the first target at or below the
+                viewport top instead of measuring all of them (each
+                measurement forces layout of skipped content)  */
             let current = null
-            for (let i = 0; i < targets.length; i++) {
-                if (targets[i] === null)
+            let lo = 0
+            let hi = targets.length - 1
+            let first = targets.length
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1
+                let k = mid
+                while (k <= hi && targets[k] === null)
+                    k++
+                if (k > hi) {
+                    hi = mid - 1
                     continue
-                const top = targets[i].getBoundingClientRect().top
-                if (top >= -1 && top < window.innerHeight) {
-                    current = links[i]
-                    break
                 }
-                if (top < -1)
-                    current = links[i]
+                if (targets[k].getBoundingClientRect().top >= -1) {
+                    first = k
+                    hi = mid - 1
+                }
+                else
+                    lo = k + 1
+            }
+            let next = first
+            while (next < targets.length && targets[next] === null)
+                next++
+            if (next < targets.length && targets[next].getBoundingClientRect().top < window.innerHeight)
+                current = links[next]
+            else {
+                let prev = first - 1
+                while (prev >= 0 && targets[prev] === null)
+                    prev--
+                if (prev >= 0)
+                    current = links[prev]
             }
             if (current === active)
                 return
