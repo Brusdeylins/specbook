@@ -18,7 +18,7 @@ import type { OutlineEntry, PrintDocument }
     from "./specbook-export-html.js"
 import type { ThemeMapping }
     from "./specbook-theme.js"
-import { literal, type Verbose }
+import { literal, elapsed, type Verbose }
     from "./specbook-verbose.js"
 
 /*  the document heading rendered into the page decoration  */
@@ -335,7 +335,9 @@ export const htmlToPdf = async (
 
         /*  paginate the body of the document just once  */
         verbose("paginating document body")
+        let since = performance.now()
         const doc = await renderPdf(print.body)
+        verbose(`paginated document body into ${literal(doc.getPageCount())} page(s) in ${elapsed(since)}`)
 
         /*  determine the page count of the table of contents via a
             fixpoint iteration: render it with the page numbers of the
@@ -345,10 +347,17 @@ export const htmlToPdf = async (
         const front  = titlePage ? 1 : 0
         const render = print.toc
         if (render !== null) {
-            verbose("paginating table of contents")
             const anchors  = await anchorPages(doc)
-            const paginate = (count: number) => renderPdf(render(new Map(Array.from(anchors,
-                ([ anchor, number ]) => [ anchor, number > front ? number + count : number ]))), {}, true)
+            let   pass     = 0
+            const paginate = async (count: number) => {
+                verbose(`paginating table of contents (pass ${literal(++pass)})`)
+                since = performance.now()
+                const toc = await renderPdf(render(new Map(Array.from(anchors,
+                    ([ anchor, number ]) => [ anchor, number > front ? number + count : number ]))), {}, true)
+                verbose(`paginated table of contents into ${literal(toc.getPageCount())} page(s) ` +
+                    `in ${elapsed(since)}`)
+                return toc
+            }
             let count = 0
             let toc   = await paginate(count)
             for (let i = 0; i < tocPasses && toc.getPageCount() !== count; i++) {
@@ -366,15 +375,18 @@ export const htmlToPdf = async (
             /*  merge the table of contents into the body (keeping the
                 named destinations of the body and hence its internal
                 hyperlinks intact) and link its entries to them  */
+            since = performance.now()
             const pages = await doc.copyPages(toc, toc.getPageIndices())
             pages.forEach((merged, i) => { doc.insertPage(front + i, merged) })
             await relinkPages(pages)
+            verbose(`merged table of contents into document in ${elapsed(since)}`)
         }
 
         /*  render the page decoration onto all pages except a title page,
             which carries no header/footer, as the decoration of empty
             pages laid over the pages  */
         verbose("decorating pages with header and footer")
+        since = performance.now()
         const count = doc.getPageCount()
         const decoration = await renderPdf("<!DOCTYPE html><html><head><style>" +
             "div { height: 1px } div + div { break-before: page }</style></head><body>" +
@@ -390,6 +402,7 @@ export const htmlToPdf = async (
         const indices  = doc.getPageIndices().slice(front)
         const overlays = await doc.embedPages(indices.map((index) => decoration.getPage(index)))
         indices.forEach((index, i) => { doc.getPage(index).drawPage(overlays[i]) })
+        verbose(`decorated ${literal(indices.length)} page(s) in ${elapsed(since)}`)
 
         /*  attach the document outline for the viewer side-bar  */
         verbose("attaching PDF outline (bookmarks)")
@@ -397,7 +410,10 @@ export const htmlToPdf = async (
 
         /*  decorate every page with the vertical brand bar  */
         await drawBrandBar(doc, theme.accent)
-        return Buffer.from(await doc.save())
+        since = performance.now()
+        const pdf = Buffer.from(await doc.save())
+        verbose(`serialized PDF document of ${literal(count)} page(s) in ${elapsed(since)}`)
+        return pdf
     }
     finally {
         await browser.close()

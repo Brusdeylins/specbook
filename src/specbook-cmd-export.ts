@@ -25,7 +25,7 @@ import { renderMarkdown, type MarkdownRebase }
 import { renderHtml, renderPrintHtml, htmlOutline, titlePageObject }
     from "./specbook-export-html.js"
 import { htmlToPdf, requireBrowser } from "./specbook-export-pdf.js"
-import { literal, type Verbose }     from "./specbook-verbose.js"
+import { literal, elapsed, type Verbose } from "./specbook-verbose.js"
 
 /*  re-export the browser pre-check of the PDF renderer, so the API
     facade reaches the renderers through this command module only  */
@@ -218,19 +218,25 @@ const renderFormat = async (
     const css    = themeStylesheet(colors) + await subsetStylesheet(charset) + paperStylesheet(paper)
     if (format === "html") {
         /*  compress the rendered HTML (whitespace, comments, and inline CSS/JS)  */
+        let   since    = performance.now()
         const html     = await renderHtml(specification, config, css, options, verbose)
+        verbose(`rendered HTML document in ${elapsed(since)}`)
+        since = performance.now()
         const minified = await minify(Buffer.from(html, "utf8"), {
             collapseWhitespaces: "smart",
             removeComments:      true,
             minifyCss:           true,
             minifyJs:            true
         })
+        verbose(`minified HTML document in ${elapsed(since)}`)
         return Buffer.from(minified.code, "utf8")
     }
     else {
         /*  the PDF export (like print in general) always uses the light
             theme, so its decoration colors are the light mapping, too  */
+        const since = performance.now()
         const print = await renderPrintHtml(specification, config, css, { omit: options.omit }, verbose)
+        verbose(`rendered print HTML document in ${elapsed(since)}`)
         return htmlToPdf(print,
             { ...documentTitle(specification), logo: documentLogo(specification) },
             htmlOutline(specification, config), titlePageObject(specification) !== undefined,

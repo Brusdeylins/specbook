@@ -49,6 +49,12 @@ const marker = new RegExp(`${begin}([^${end}]*)${end}`, "g")
 export const literal = (value: string | number): string =>
     `${begin}${value}${end}`
 
+/*  render the time elapsed since a moment (as taken by
+    "performance.now()") as a marked literal number of seconds, for
+    the progress messages of the long-running phases  */
+export const elapsed = (since: number): string =>
+    `${literal(((performance.now() - since) / 1000).toFixed(1))}s`
+
 /*  render a verbose message by either styling its marked literal values
     with the given styler or just stripping their markers away  */
 export const renderVerbose = (msg: string, style?: (value: string) => string): string =>
