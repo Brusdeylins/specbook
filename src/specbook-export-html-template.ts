@@ -59,10 +59,10 @@ const templates = {
                 {{ Document.doc }}
                 {{ Document.artifacts }}
                 {% if Document.search %}<script>{{ Document.search }}</script>{% endif %}
-                <script>{{ Document.progress }}</script>
-                <script>{{ Document.fold }}</script>
-                <script>{{ Document.maximize }}</script>
-                {% if Document.tocpanel %}<script>{{ Document.tocscript }}</script>{% endif %}
+                {% if Document.progress %}<script>{{ Document.progress }}</script>{% endif %}
+                {% if Document.fold %}<script>{{ Document.fold }}</script>{% endif %}
+                {% if Document.maximize %}<script>{{ Document.maximize }}</script>{% endif %}
+                {% if Document.tocscript %}<script>{{ Document.tocscript }}</script>{% endif %}
                 {% if Document.info %}<script>{{ Document.info }}</script>{% endif %}
                 {% if Document.realtime %}<script class="realtime">{{ Document.realtime }}</script>{% endif %}
             </body>
