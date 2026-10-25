@@ -284,8 +284,13 @@ const prepareDocument = async (specification: Spec, config: Schema | undefined,
         const content = part !== "toc"
         const entries = part !== "body" ? tocEntries(objects, tocPages) : []
 
-        /*  render the artifacts  */
-        const contents = content ? artifacts.map((artifact) => renderArtifact(artifact)) : []
+        /*  number the top-level objects across all artifacts  */
+        let   number   = 1
+        const contents = content ? artifacts.map((artifact) => {
+            const html = renderArtifact(artifact, number)
+            number += artifact.objects.length
+            return html
+        }) : []
         return render("Document", { Document: {
             title:       documentTitle(specification).title,
             lang,

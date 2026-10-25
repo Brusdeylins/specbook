@@ -318,6 +318,26 @@ export const tocPanelScript = textframe`
         const list    = panel.querySelector("div.toc-list")
         const links   = Array.from(panel.querySelectorAll("a"))
         const targets = links.map((a) => document.getElementById(decodeURIComponent(a.hash.slice(1))))
+
+        /*  tell whether the top of a target lies at or below a viewport
+            position, where a target inside a top-level section, whose
+            rendering the browser skips while it is outside the viewport
+            (see "content-visibility" in the stylesheet), is located by the
+            box of its section as long as that lies entirely on one side of
+            the position, as measuring the target itself would force the
+            browser to lay out the skipped section (and change its height
+            from the estimated one in the middle of the search)  */
+        const sections = targets.map((el) => el?.closest("article > section") ?? null)
+        const below = (k, y) => {
+            if (sections[k] !== null) {
+                const box = sections[k].getBoundingClientRect()
+                if (box.top >= y)
+                    return true
+                if (box.bottom < y)
+                    return false
+            }
+            return targets[k].getBoundingClientRect().top >= y
+        }
         let active = null
         const reveal = () => {
             const top = active.getBoundingClientRect().top - list.getBoundingClientRect().top
@@ -329,17 +349,41 @@ export const tocPanelScript = textframe`
                 window.removeEventListener("scroll", spy)
                 return
             }
+            /*  the targets are in document order, so their tops are
+                monotonic: binary-search the first target at or below the
+                viewport top instead of measuring all of them (each
+                measurement forces layout of skipped content)  */
             let current = null
-            for (let i = 0; i < targets.length; i++) {
-                if (targets[i] === null)
+            let lo = 0
+            let hi = targets.length - 1
+            let first = targets.length
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1
+                let k = mid
+                while (k <= hi && targets[k] === null)
+                    k++
+                if (k > hi) {
+                    hi = mid - 1
                     continue
-                const top = targets[i].getBoundingClientRect().top
-                if (top >= -1 && top < window.innerHeight) {
-                    current = links[i]
-                    break
                 }
-                if (top < -1)
-                    current = links[i]
+                if (below(k, -1)) {
+                    first = k
+                    hi = mid - 1
+                }
+                else
+                    lo = k + 1
+            }
+            let next = first
+            while (next < targets.length && targets[next] === null)
+                next++
+            if (next < targets.length && !below(next, window.innerHeight))
+                current = links[next]
+            else {
+                let prev = first - 1
+                while (prev >= 0 && targets[prev] === null)
+                    prev--
+                if (prev >= 0)
+                    current = links[prev]
             }
             if (current === active)
                 return
